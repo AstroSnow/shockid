@@ -1,5 +1,5 @@
 ;Identify and clasify shocks based on the SHOCKFIND algorythm (https://arxiv.org/abs/1608.02050)
-pro shockid3D_fun,shocks,fname=fname,tread=tread,ndim=ndim
+pro shockid3d_fun,shocks,fname=fname,tread=tread,ndim=ndim
   Compile_Opt DEFINT32  
 
 ;Compile a few necessary function
@@ -8,7 +8,7 @@ RESOLVE_ROUTINE, 'where_vector', /IS_FUNCTION
 RESOLVE_ROUTINE, 'interp2d', /IS_FUNCTION
 RESOLVE_ROUTINE, 'datatype', /IS_FUNCTION
 RESOLVE_ROUTINE, 'shocknormvals', /IS_FUNCTION
-RESOLVE_ROUTINE, 'shocknormvals3D', /IS_FUNCTION
+RESOLVE_ROUTINE, 'shocknormvals3d', /IS_FUNCTION
 
 ;Input directory
 ;fname='../MHD_test'
@@ -21,12 +21,12 @@ RESOLVE_ROUTINE, 'shocknormvals3D', /IS_FUNCTION
 
 ;Read in the data
 print,'Reading data'
-rdmpi,ds,datapath=fname,time_step=tread,var=['ro_p','vx_p','vy_p','vz_p']
+rdmpi,ds,datapath=fname,time_step=tread;,var=['ro_p','vx_p','vy_p','vz_p']
 
 ;Parameters for shock limits
 convl=0.01 ;Convergence threshold
-avecyl=3 ;Cylinder to average over
-smthfac=1 ;smoothing factor (1=no smoothing)
+avecyl=4 ;Cylinder to average over
+smthfac=3 ;smoothing factor (1=no smoothing)
 shocktol=0.05 ;tolerence for the shock transitions
 bulkspeed=0 ; Use the bulk sound and alfven speeds or individual
 species='plasma' ; plasma or neutral
@@ -81,10 +81,10 @@ if (ds.fl_pip eq 1) and (bulkspeed eq 0) and (species eq 'plasma') then begin
         vx=smooth(ds.vx_p(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
         vy=smooth(ds.vy_p(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
         vz=smooth(ds.vz_p(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-;        bx=smooth(ds.bx(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-;       by=smooth(ds.by(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-;        bz=smooth(ds.bz(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-;        pr=smooth(ds.pr_p(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
+        bx=smooth(ds.bx(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
+        by=smooth(ds.by(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
+        bz=smooth(ds.bz(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
+        pr=smooth(ds.pr_p(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
     endif
     if (ndim eq 2) then begin
         ro=smooth(ds.ro_p(margin:egx-margin,margin:egy-margin),smthfac)
@@ -200,13 +200,14 @@ zrow = index / (nrow*ncol)
 endif
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Remove cells that are not a local maximum
-print,'Removing non-local maximum density gradients from candidate cells'
+print,'Removing non-local maximum density gradients from candidate cells n=',n_elements(col)
 
 col2=[]
 row2=[]
+zrow2=[]
 
 for i=0,n_elements(col)-1 do begin
-;for i=0,225 do begin
+;for i=0,1000 do begin
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;Step ii: find shock normal based on density gradient
@@ -280,14 +281,16 @@ for i=0,n_elements(col)-1 do begin
     if b eq avecyl then begin
         row2=[row2,row(i)]
         col2=[col2,col(i)]
+	if ndim eq 3 then zrow2=[zrow2,zrow(i)]
     endif
 endfor
 row=row2
 col=col2
+if ndim eq 3 then zrow=zrow2
 
-p=plot3D(col,row,zrow,'.')
-print,'ONLY DONE UP TO HERE'
-stop
+;p=plot3D(col,row,zrow,'.',xr=[0,n_elements(x)],yr=[0,n_elements(y)],zr=[0,n_elements(z)])
+;print,'ONLY DONE UP TO HERE'
+;stop
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Filter the candidate cells for testing
@@ -297,40 +300,62 @@ xminf=0.28
 xmaxf=0.35
 yminf=0.22
 ymaxf=0.3
+zminf=0.1
+zmaxf=0.2
 
 col2=[]
 row2=[]
+zrow2=[]
 for i=0,n_elements(row)-1 do begin
+    if ndim eq 2 then begin
     if (x(col(i)) LT xmaxf) and (x(col(i)) GT xminf) and (y(row(i)) LT ymaxf) and (y(row(i)) GT yminf) then begin
             row2=[row2,row(i)]
             col2=[col2,col(i)]
+    endif
+    endif
+    if ndim eq 3 then begin
+    if (x(col(i)) LT xmaxf) and (x(col(i)) GT xminf) and $
+	(y(row(i)) LT ymaxf) and (y(row(i)) GT yminf) and $
+	(z(zrow(i)) LT zmaxf) and (z(zrow(i)) GT zminf) then begin
+            row2=[row2,row(i)]
+            col2=[col2,col(i)]
+	    zrow2=[zrow2,zrow(i)]
+    endif
     endif
 endfor
 
 col=col2
 row=row2
+if ndim eq 3 then zrow=zrow2
+
 endif
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Arrays for the shock locations
 fastx=[]
 fasty=[]
+fastz=[]
 fastm=[]
 
 slowx=[]
 slowy=[]
+slowz=[]
 slowm=[]
 
 int1x=[]
 int1y=[]
+int1z=[]
 
 int2x=[]
 int2y=[]
+int2z=[]
 
 int3x=[]
 int3y=[]
+int3z=[]
 
 int4x=[]
 int4y=[]
+int4z=[]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 if data_save eq 1 then begin
@@ -361,19 +386,37 @@ arrvs=dblarr(N_elements(col))
 end
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-print,'Begin loop'
+print,'Begin loop for n=',n_elements(col)
 ;loop over candidates
 for i=0,n_elements(col)-1 do begin
+;print,'REMEMBER TO CHANGE START TO 0'
 ;for i=0,225 do begin
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;Step ii: find shock normal based on density gradient
-    normx=gradx(col(i),row(i))/gradmag(col(i),row(i))
-    normy=grady(col(i),row(i))/gradmag(col(i),row(i))
+    if ndim eq 2 then begin
+        normx=gradx(col(i),row(i))/gradmag(col(i),row(i))
+        normy=grady(col(i),row(i))/gradmag(col(i),row(i))
+    endif
+    if ndim eq 3 then begin
+        normx=gradx(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
+        normy=grady(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
+        normz=gradz(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
+    endif
 
     ;Find perpendicular direction too
     perpx=(-normy/normx)/sqrt(normy^2/normx^2+1.0)
     perpy=1.0/sqrt(normy^2/normx^2+1.0)
+    if ndim eq 2 then begin
+        perpx=(-normy/normx)/sqrt(normy^2/normx^2+1.0)
+        perpy=1.0/sqrt(normy^2/normx^2+1.0)
+    endif
+    if ndim eq 3 then begin
+;print,'PERP VALUES NOT QUITE RIGHT'
+	perpx=(-normy-normz)/normx/sqrt(2.0+((-normy-normz)/normx)^2)
+	perpy=1.0/sqrt(2.0+((-normy-normz)/normx)^2)
+	perpz=1.0/sqrt(2.0+((-normy-normz)/normx)^2)
+    endif
 
     ;print,normx,normy,gradx(col(i),row(i)),grady(col(i),row(i))
 
@@ -387,64 +430,97 @@ for i=0,n_elements(col)-1 do begin
     tempx2=indgen(2*avecyl+1)-avecyl
     tempy2=indgen(2*avecyl+1)-avecyl
 
+    if ndim eq 3 then begin
+        tempz=indgen(2*avecyl+1)-avecyl+zrow(i)
+        tempz2=indgen(2*avecyl+1)-avecyl
+    endif
+
     ;use periodic BC to fix negative values
     for ii=0,2*avecyl do begin
-        if tempx(ii) lt 0 then tempx(ii)=N_elements(divv(*,0))+tempx(ii)
-        if tempy(ii) lt 0 then tempy(ii)=N_elements(divv(0,*))+tempy(ii)
+        if ndim eq 2 then begin
+            if tempx(ii) lt 0 then tempx(ii)=N_elements(divv(*,0))+tempx(ii)
+            if tempy(ii) lt 0 then tempy(ii)=N_elements(divv(0,*))+tempy(ii)
+        endif
+        if ndim eq 3 then begin
+            if tempx(ii) lt 0 then tempx(ii)=N_elements(divv(*,0,0))+tempx(ii)
+            if tempy(ii) lt 0 then tempy(ii)=N_elements(divv(0,*,0))+tempy(ii)
+            if tempz(ii) lt 0 then tempz(ii)=N_elements(divv(0,0,*))+tempz(ii)
+        endif
     endfor
 
     ;use periodic BC to fix outside grid values
     for ii=0,2*avecyl do begin
-        if tempx(ii) gt n_elements(divv(*,0))-1 then tempx(ii)=tempx(ii)-N_elements(divv(*,0))
-        if tempy(ii) gt n_elements(divv(0,*))-1 then tempy(ii)=tempy(ii)-N_elements(divv(0,*))
+        if ndim eq 2 then begin
+            if tempx(ii) gt n_elements(divv(*,0))-1 then tempx(ii)=tempx(ii)-N_elements(divv(*,0))
+            if tempy(ii) gt n_elements(divv(0,*))-1 then tempy(ii)=tempy(ii)-N_elements(divv(0,*))
+        endif
+        if ndim eq 3 then begin
+            if tempx(ii) gt n_elements(divv(*,0,0))-1 then tempx(ii)=tempx(ii)-N_elements(divv(*,0,0))
+            if tempy(ii) gt n_elements(divv(0,*,0))-1 then tempy(ii)=tempy(ii)-N_elements(divv(0,*,0))
+            if tempz(ii) gt n_elements(divv(0,0,*))-1 then tempz(ii)=tempz(ii)-N_elements(divv(0,0,*))
+        endif
     endfor
 
-
     ;Interpolate the values normal to the shock NOTE: THES ARE NOT PARALLEL TO SHOCK YET!
-    ronorm=shocknormvals(ro,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
-    vxnorm=shocknormvals(vx,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
-    vynorm=shocknormvals(vy,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
-    prnorm=shocknormvals(pr,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
+    if ndim eq 2 then begin
+	ronorm=shocknormvals(ro,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
+	vxnorm=shocknormvals(vx,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
+	vynorm=shocknormvals(vy,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
+	prnorm=shocknormvals(pr,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
 
-    if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
-    bxnorm=shocknormvals(bx,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
-    bynorm=shocknormvals(by,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
+	if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
+	bxnorm=shocknormvals(bx,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
+	bynorm=shocknormvals(by,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
+	endif
+    endif
+    if ndim eq 3 then begin
+    tempxyz=dblarr(6,2*avecyl+1)
+    tempxyz(0,*)=tempx
+    tempxyz(1,*)=tempy
+    tempxyz(2,*)=tempz
+    tempxyz(3,*)=tempx2
+    tempxyz(4,*)=tempy2
+    tempxyz(5,*)=tempz2
+    ronorm=shocknormvals3d(ro,tempxyz,avecyl,normx,normy,normz)
+    vxnorm=shocknormvals3d(vx,tempxyz,avecyl,normx,normy,normz)
+    vynorm=shocknormvals3d(vy,tempxyz,avecyl,normx,normy,normz)
+    vznorm=shocknormvals3d(vz,tempxyz,avecyl,normx,normy,normz)
+    prnorm=shocknormvals3d(pr,tempxyz,avecyl,normx,normy,normz)
+	if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
+        bxnorm=shocknormvals3d(bx,tempxyz,avecyl,normx,normy,normz)
+        bynorm=shocknormvals3d(by,tempxyz,avecyl,normx,normy,normz)
+        bznorm=shocknormvals3d(bz,tempxyz,avecyl,normx,normy,normz)
+	endif
     endif
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Check for maximum density gradient along the normal
-    ;rgnorm=dblarr(2*avecyl+1)
-    ;for ii=1,2*avecyl-2 do begin
-    ;    rgnorm(ii)=abs(ronorm(ii+1)-ronorm(ii-1))
-    ;endfor
 
-    ;if (max(rgnorm)-abs(rgnorm(avecyl))) lt 1.0e-6 then begin
-
-    ;a=max(abs(deriv(ronorm)),b)
-    ;if b eq avecyl then begin
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;I think these are the wrong way round
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;Calculate the parallel and perpendicular velocity and magnetic field
-;    vpar=normx*vxnorm+normy*vynorm
-    ;vperp=sqrt(vxnorm^2+vynorm^2-vpar^2)
-;    vperp=perpx*vxnorm+perpy*vynorm
-;    bpar=normx*bxnorm+normy*bynorm
-    ;bperp=sqrt(bxnorm^2+bynorm^2-bpar^2)
-;    bperp=perpx*bxnorm+perpy*bynorm
-;    ang=atan(bpar/bperp) ;DOUBLE CHECK THIS
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+    if ndim eq 2 then vperp=normx*vxnorm+normy*vynorm
+    if ndim eq 3 then vperp=normx*vxnorm+normy*vynorm+normy*vznorm
+    if ndim eq 2 then vpar=perpx*vxnorm+perpy*vynorm
+    ;if ndim eq 3 then vpar=perpx*vxnorm+perpy*vynorm+perpz*vznorm ;Defined elsewhere
 
-    ;Calculate the parallel and perpendicular velocity and magnetic field
-    vperp=normx*vxnorm+normy*vynorm
-    ;vperp=sqrt(vxnorm^2+vynorm^2-vpar^2)
-    vpar=perpx*vxnorm+perpy*vynorm
 
     if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
-    bperp=normx*bxnorm+normy*bynorm
-    ;bperp=sqrt(bxnorm^2+bynorm^2-bpar^2)
-    bpar=perpx*bxnorm+perpy*bynorm
-    ang=atan(bpar/bperp) ;DOUBLE CHECK THIS
+	if ndim eq 2 then begin
+	    bperp=normx*bxnorm+normy*bynorm
+	    ;bperp=sqrt(bxnorm^2+bynorm^2-bpar^2)
+	    bpar=perpx*bxnorm+perpy*bynorm
+	    ang=atan(bpar/bperp) ;DOUBLE CHECK THIS
+	endif
+	if ndim eq 3 then begin
+	    bperp=normx*bxnorm+normy*bynorm+normz*bznorm
+	    bmag2=bxnorm^2+bynorm^2+bznorm^2
+	    vmag2=vxnorm^2+vynorm^2+vznorm^2
+	    sinang=sqrt(((bmag2-bperp^2)*vperp - vmag2+vperp^2)/(bmag2+vperp^2-vmag2-bperp^2))
+	    sinang(where (sinang gt  1.0))=1.0
+	    sinang(where (sinang lt -1.0))=-1.0
+	    ang2=asin(sinang)
+            vpar=sqrt(vmag2-vperp^2)*sin(ang2)
+            bpar=sqrt(bmag2-bperp^2)*sin(ang2)
+	    ang=atan(bpar/bperp)
+	endif
     endif
 
     ;define pre and post shock indicies
@@ -468,48 +544,27 @@ for i=0,n_elements(col)-1 do begin
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;Estimate shock speed 
-;    vs=(vpar(ipre)-vpar(ipos))/(1.0-ronorm(ipre)/ronorm(ipos))
-    ;vs=(vperp(ipre)-vperp(ipos))/(1.0-ronorm(ipre)/ronorm(ipos))
     vs=con_mas
 
 
     ;Calculate Mach numbers
     cs2=5.0/3.0*prnorm/ronorm
     if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
-    va2=(bxnorm^2+bynorm^2)/ronorm
+    if ndim eq 2 then va2=(bxnorm^2+bynorm^2)/ronorm
+    if ndim eq 3 then va2=(bxnorm^2+bynorm^2+bznorm^2)/ronorm
     vap2=bperp^2/ronorm
     vslow2=0.5*(cs2+va2-sqrt((cs2+va2)^2 - 4.0*va2*cs2*(cos(ang))^2))
     vfast2=0.5*(cs2+va2+sqrt((cs2+va2)^2 - 4.0*va2*cs2*(cos(ang))^2))
     endif
 
-;    p=plot((vpar-vs)^2)
-;    p=plot(cs2,/overplot,'r')
-;    p=plot(va2,/overplot,'b')
-;    p=plot(vslow2,/overplot,'g')
-;    p=plot(vfast2,/overplot,'m')
 
     vf=vperp
 
-    vf=vperp+vs ;I think this is the correct one
-    ;if vs LT 0.0 then vf=vperp-vs
-    ;if vs GT 0.0 then vf=vperp+vs
-
-    ;if abs(vperp(ipre)+vs) GT abs(vperp(ipre)-vs) then vf=vperp+vs
-    ;if abs(vperp(ipre)-vs) GT abs(vperp(ipre)+vs) then vf=vperp-vs
-
-    ;if ronorm(ipre) LT ronorm(ipos) then vf=vperp-vs
-    ;if ronorm(ipos) LT ronorm(ipre) then vf=vperp+vs
-
-    ;if min(abs(vperp)) LT vs then vf=vperp+vs
-    ;if min(abs(vperp)) GT vs then vf=vperp-vs
+    vf=vperp+vs 
 
     if data_save eq 1 then begin
     ;alocate data to perminant array
     arrronorm(i,*)=ronorm
-    ;arrvxnorm(i,*)=vxnorm
-    ;arrvynorm(i,*)=vynorm
-    ;arrbxnorm(i,*)=bxnorm
-    ;arrbynorm(i,*)=bynorm
     arrprnorm(i,*)=prnorm
     arrvpar(i,*)=vpar
     arrvperp(i,*)=vperp
@@ -519,52 +574,12 @@ for i=0,n_elements(col)-1 do begin
     arrvfast2(i,*)=vfast2
     arrvalf2(i,*)=vap2
     arrvs(i)=vs
-    ;arrnx(i)=normx
-    ;arrny(i)=normy
-    ;arrpx(i)=perpx
-    ;arrpy(i)=perpy
     arrms(i,*)=abs(vf/sqrt(vslow2))
     arrma(i,*)=abs(vf/sqrt(vap2))
     arrmf(i,*)=abs(vf/sqrt(vfast2))
     endif
-    ;Test if it is a shock
-;    if (max(vf/sqrt(vslow2)) GT 1) and (min(vf/sqrt(vslow2)) LT 1) then begin
-;        slowx=[slowx,col(i)]
-;        slowy=[slowy,row(i)]
-;    endif
 
-;    if (max(vf/sqrt(vfast2)) GT 1) and (min(vf/sqrt(vfast2)) LT 1) then begin
-;        fastx=[fastx,col(i)]
-;        fasty=[fasty,row(i)]
-;    endif 
-
-    ;Test if it is a shock
-;    if (vf(ipre)/sqrt(vslow2(ipre)) GT 1) and (vf(ipos)/sqrt(vslow2(ipos)) LT 1) then begin
-;        slowx=[slowx,col(i)]
-;        slowy=[slowy,row(i)]
-;    endif
-
-;    if (vf(ipre)/sqrt(vfast2(ipre)) GT 1) and (vf(ipos)/sqrt(vfast2(ipos)) LT 1) then begin
-;        fastx=[fastx,col(i)]
-;        fasty=[fasty,row(i)]
-;    endif 
-    
-;    if (max(vf(ipre:avecyl)/sqrt(vslow2(ipre:avecyl))) GT 1) and (min(vf(avecyl+1:ipos)/sqrt(vslow2(avecyl+1:ipos))) LT 1) then begin
-;        slowx=[slowx,col(i)]
-;        slowy=[slowy,row(i)]
-;    endif
-
-;    if (max(vf(ipre:avecyl)/sqrt(vfast2(ipre:avecyl))) GT 1) and (min(vf(avecyl+1:ipos)/sqrt(vfast2(avecyl+1:ipos))) LT 1) then begin
-;        fastx=[fastx,col(i)]
-;        fasty=[fasty,row(i)]
-;    endif 
-
-
-;Clasification based on transitions
-;    vslowpre =mean(abs(vf(ipre:avecyl-3)/sqrt(vslow2(ipre:avecyl-3))))
-;    valfpre  =mean(abs(vf(ipre:avecyl-3)/sqrt(vap2(ipre:avecyl-3))))
-;    vfastpre =mean(abs(vf(ipre:avecyl-3)/sqrt(vfast2(ipre:avecyl-3))))
-
+;stop
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Plasma transisitons
 if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
@@ -672,6 +687,7 @@ if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
     if (tpre eq 1) and (tpos eq 2) then begin
         fastx=[fastx,col(i)]
         fasty=[fasty,row(i)]
+	if ndim eq 3 then fastz=[fastz,zrow(i)]
         if data_save eq 1 then arrtype(i)=6
         rescode='fast'
     endif
@@ -679,6 +695,7 @@ if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
     if (tpre eq 3) and (tpos eq 4) then begin
         slowx=[slowx,col(i)]
         slowy=[slowy,row(i)]
+	if ndim eq 3 then slowz=[slowz,zrow(i)]
         if data_save eq 1 then arrtype(i)=1
         rescode='slow'
     endif 
@@ -686,6 +703,7 @@ if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
     if (tpre eq 1) and (tpos eq 3) and (bpar(ipos)*bpar(ipre) LT 0) then begin
         int1x=[int1x,col(i)]
         int1y=[int1y,row(i)]
+	if ndim eq 3 then int1z=[int1z,zrow(i)]
         if data_save eq 1 then arrtype(i)=4
         rescode='int'
     endif  
@@ -693,6 +711,7 @@ if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
     if (tpre eq 1) and (tpos eq 4) and (bpar(ipos)*bpar(ipre) LT 0) then begin
         int2x=[int2x,col(i)]
         int2y=[int2y,row(i)]
+	if ndim eq 3 then int2z=[int2z,zrow(i)]
         if data_save eq 1 then arrtype(i)=3
         rescode='int'
     endif  
@@ -701,6 +720,7 @@ if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
     if (tpre eq 2) and (tpos eq 3) and (bpar(ipos)*bpar(ipre) LT 0) then begin
         int3x=[int3x,col(i)]
         int3y=[int3y,row(i)]
+	if ndim eq 3 then int3z=[int3z,zrow(i)]
         if data_save eq 1 then arrtype(i)=5
         rescode='int'
     endif     
@@ -708,6 +728,7 @@ if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
     if (tpre eq 2) and (tpos eq 4) and (bpar(ipos)*bpar(ipre) LT 0) then begin
         int4x=[int4x,col(i)]
         int4y=[int4y,row(i)]
+	if ndim eq 3 then int4z=[int4z,zrow(i)]
         if data_save eq 1 then arrtype(i)=2
         rescode='int'
     endif 
@@ -769,78 +790,42 @@ endfor
 
 if n_elements(slowx) eq 0 then slowx=[0]
 if n_elements(slowy) eq 0 then slowy=[0]
+if n_elements(slowz) eq 0 then slowz=[0]
 
 if n_elements(fastx) eq 0 then fastx=[0]
 if n_elements(fasty) eq 0 then fasty=[0]
+if n_elements(fastz) eq 0 then fastz=[0]
 
 if n_elements(int1x) eq 0 then int1x=[0]
 if n_elements(int1y) eq 0 then int1y=[0]
+if n_elements(int1z) eq 0 then int1z=[0]
 
 if n_elements(int2x) eq 0 then int2x=[0]
 if n_elements(int2y) eq 0 then int2y=[0]
+if n_elements(int2z) eq 0 then int2z=[0]
 
 if n_elements(int3x) eq 0 then int3x=[0]
 if n_elements(int3y) eq 0 then int3y=[0]
+if n_elements(int3z) eq 0 then int3z=[0]
 
 if n_elements(int4x) eq 0 then int4x=[0]
 if n_elements(int4y) eq 0 then int4y=[0]
+if n_elements(int4z) eq 0 then int4z=[0]
 
+if ndim eq 2 then $
 shocks=create_struct(['x','y','slowx','slowy','fastx','fasty',$
 'int1x','int1y','int2x','int2y','int3x','int3y','int4x','int4y'],$
 x,y,slowx,slowy,fastx,fasty,int1x,int1y,int2x,int2y,int3x,int3y,int4x,int4y)
 
-;c=image(divv,x,y,rgb_tab=0,xtitle='x',ytitle='y',dim=[970,600], position=[0.1,0.1,0.7,0.9],axis_style=2,xr=[0,1],yr=[0,1],/buffer)
-;c=contour(divv,x,y,/fill,n_levels=101,rgb_tab=0,xtitle='x',ytitle='y',dim=[970,600], position=[0.1,0.1,0.7,0.9],xr=[0,1],yr=[0,1])
-;diva=divv                     
-;diva[where(divv gt 0)]=1.0/0.0
-;diva[where(divv gt -convl)]=1.0/0.0
-;c=image(alog10(-diva),x,y,rgb_tab=0,xtitle='x',ytitle='y',dim=[970,600], position=[0.1,0.1,0.7,0.9],axis_style=2,xr=[0,1],yr=[0,1])
-;c=image(alog10(abs(gradmag)),x,y,rgb_tab=0,xtitle='x',ytitle='y',dim=[970,600], position=[0.1,0.1,0.8,0.9],axis_style=2,xr=[0,1],yr=[0,1])
+if ndim eq 3 then $
+shocks=create_struct(['x','y','z','slowx','slowy','slowz','fastx','fasty','fastz',$
+'int1x','int1y','int1z','int2x','int2y','int2z','int3x','int3y','int3z','int4x','int4y','int4z'],$
+x,y,z,slowx,slowy,slowz,fastx,fasty,fastz,int1x,int1y,int1z,int2x,int2y,int2z,$
+int3x,int3y,int3z,int4x,int4y,int4z)
 
-;xshift=5.0
-;yshift=5.0
 
-;if N_elements(slowx) gt 0 then $
-;ps=plot(1.0*slowx/(1.0*n_elements(x)-xshift),1.0*slowy/(1.0*n_elements(y)-yshift),/overplot,'.r',name='slow',thick=0.1,sym_thick=2)
-;if N_elements(fastx) gt 0 then $
-;pf=plot(1.0*fastx/(1.0*n_elements(x)-xshift),1.0*fasty/(1.0*n_elements(y)-yshift),/overplot,'.b',name='fast',thick=0.1,sym_thick=2)
-;if N_elements(int1x) gt 0 then $
-;pi1=plot(1.0*int1x/(1.0*n_elements(x)-xshift),1.0*int1y/(1.0*n_elements(y)-yshift),/overplot,'.y',name='Int (1-3)',thick=0.1,sym_thick=2)
-;if N_elements(int2x) gt 0 then $
-;pi2=plot(1.0*int2x/(1.0*n_elements(x)-xshift),1.0*int2y/(1.0*n_elements(y)-yshift),/overplot,'.m',name='Int (1-4)',thick=0.1,sym_thick=2)
-;if N_elements(int3x) gt 0 then $
-;pi3=plot(1.0*int3x/(1.0*n_elements(x)-xshift),1.0*int3y/(1.0*n_elements(y)-yshift),/overplot,'.c',name='Int (2-3)',thick=0.1,sym_thick=2)
-;if N_elements(int4x) gt 0 then $
-;pi4=plot(1.0*int4x/(1.0*n_elements(x)-xshift),1.0*int4y/(1.0*n_elements(y)-yshift),/overplot,'.g',name='Int (2-4)',thick=0.1,sym_thick=2)
+;p=plot3d(slowx,slowy,slowz,'.r',xr=[0,n_elements(x)],yr=[0,n_elements(y)],zr=[0,n_elements(z)])
 
-;to get the labels right:
-;psl=plot([-1,-1],[-1,-1],/overplot,'r',name='slow (3-4)',thick=2)
-;pfl=plot([-1,-1],[-1,-1],/overplot,'b',name='fast (1-2)',thick=2)
-;pi1l=plot([-1,-1],[-1,-1],/overplot,'y',name='Int (1-3)',thick=2)
-;pi2l=plot([-1,-1],[-1,-1],/overplot,'m',name='Int (1-4)',thick=2)
-;pi3l=plot([-1,-1],[-1,-1],/overplot,'c',name='Int (2-3)',thick=2)
-;pi4l=plot([-1,-1],[-1,-1],/overplot,'g',name='Int (2-4)',thick=2)
-
-;l=legend(target=[psl,pfl,pi1l,pi2l,pi3l,pi4l])
-;l.position=[0.9,0.9]
-
-;Annotate the number of shocks
-;ts=text(0.75,0.6,'Slow = '+strtrim(n_elements(slowx),1),/overplot)
-;ts=text(0.75,0.55,'Fast = '+strtrim(n_elements(fastx),1),/overplot)
-;ts=text(0.75,0.5,'Int (1-3) = '+strtrim(n_elements(int1x),1),/overplot)
-;ts=text(0.75,0.45,'Int (1-4) = '+strtrim(n_elements(int2x),1),/overplot)
-;ts=text(0.75,0.4,'Int (2-3) = '+strtrim(n_elements(int3x),1),/overplot)
-;ts=text(0.75,0.35,'Int (2-4) = '+strtrim(n_elements(int4x),1),/overplot)
-
-;if data_subset eq 1 then begin
-;c.xr=[xminf,xmaxf]
-;c.yr=[yminf,ymaxf]
-;pf.sym_thick=4
-;ps.sym_thick=4
-;endif
-
-;c.save,'shockid_PIP_MHD_t'+strtrim(tread,1)+'.pdf'
-;c.save,'shockid_PIP_ac_100_t'+strtrim(tread,1)+'_'+species+'_bulk.pdf'
 
 if data_save eq 1 then begin
 save,arrronorm,arrvxnorm,arrvynorm,arrbxnorm,arrbynorm,$
