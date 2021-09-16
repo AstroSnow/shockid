@@ -9,7 +9,7 @@ rdmpi,ds,datapath=fname,time_step=tread,/current
 jz=ds.j_z
 
 nx=n_elements(ds.x)
-ny=n_elements(ds.y)
+ny=n_elements(ds.y) 
 jz=jz(6:nx-7,6:ny-7)
 ;vx=(ds.vx_p(6:nx-7,6:ny-7))*sqrt(ds.ro_p(6:nx-7,6:ny-7))
 ;vy=(ds.vy_p(6:nx-7,6:ny-7))*sqrt(ds.ro_p(6:nx-7,6:ny-7))
