@@ -21,6 +21,7 @@ curl=[]
 
 ;i=2
 for i=2,cur.count*2+1,2 do begin
+if n_elements(cur(i)) GT 5 then begin
 x=cur.(i)
 y=cur.(i+1)
 
@@ -103,6 +104,8 @@ wmin=interpol(lnorm(avecyl:0:-1),jznorm(avecyl:0:-1),jmax/2.0)
 wl=wmax-wmin
 
 curw=[curw,wl]
+
+endif
 
 endfor
 
