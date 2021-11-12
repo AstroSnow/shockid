@@ -9,6 +9,7 @@ RESOLVE_ROUTINE, 'interp2d', /IS_FUNCTION
 RESOLVE_ROUTINE, 'datatype', /IS_FUNCTION
 RESOLVE_ROUTINE, 'shocknormvals', /IS_FUNCTION
 RESOLVE_ROUTINE, 'shocknormvals3d', /IS_FUNCTION
+RESOLVE_ROUTINE, 'shockplane3d', /IS_FUNCTION
 
 ;Input directory
 ;fname='../MHD_test'
@@ -22,11 +23,10 @@ RESOLVE_ROUTINE, 'shocknormvals3d', /IS_FUNCTION
 ;Read in the data
 print,'Reading data'
 rdmpi,ds,datapath=fname,time_step=tread;,var=['ro_p','vx_p','vy_p','vz_p']
-
 ;Parameters for shock limits
 convl=0.01 ;Convergence threshold
-avecyl=4 ;Cylinder to average over
-smthfac=3 ;smoothing factor (1=no smoothing)
+avecyl=5 ;Cylinder to average over
+smthfac=0 ;smoothing factor (1=no smoothing)
 shocktol=0.05 ;tolerence for the shock transitions
 bulkspeed=0 ; Use the bulk sound and alfven speeds or individual
 species='plasma' ; plasma or neutral
@@ -412,12 +412,52 @@ for i=0,n_elements(col)-1 do begin
         perpy=1.0/sqrt(normy^2/normx^2+1.0)
     endif
     if ndim eq 3 then begin
-;print,'PERP VALUES NOT QUITE RIGHT'
-	perpx=(-normy-normz)/normx/sqrt(2.0+((-normy-normz)/normx)^2)
-	perpy=1.0/sqrt(2.0+((-normy-normz)/normx)^2)
-	perpz=1.0/sqrt(2.0+((-normy-normz)/normx)^2)
+    ;Get the plane perpendicular to the shock 
+    pplane=shockplane3d(normx,normy,normz)
+    ;Get the density in this plane
+    ppro=dblarr(3,3)
+    for j=0,2 do begin
+    for k=0,2 do begin
+        ppro(j,k)=interpolate(ro,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+    end
+    end
+    ;get the gradient of thedensity along the plane
+    ppgrox=ppro(2,1)-ppro(0,1)
+    ppgroy=ppro(1,2)-ppro(1,0)
+    if abs(ppgrox) lt 1.0e-8 then begin
+        ppx=0.0
+        ppy=1.0
+    endif else if abs(ppgroy) lt 1.0e-8 then begin
+        ppx=1.0
+        ppy=0.0
+    endif else begin
+        ppx=ppgrox/sqrt(ppgrox^2+ppgroy^2)
+        ppy=ppgroy/sqrt(ppgrox^2+ppgroy^2)
+    endelse
+    ;get the perp vectors
+    perpx=normy*ppx-normz*ppy
+    perpy=-normx*ppx
+    perpz=normx*ppy
+    ;Make sure its a unit vector
+    perpt=sqrt(perpx^2+perpy^2+perpz^2)
+    perpx=perpx/perpt
+    perpy=perpy/perpt
+    perpz=perpz/perpt    
+;print,perpx,perpy,perpz,perpt
+	;perpx=(-normy-normz)/normx/sqrt(2.0+((-normy-normz)/normx)^2)
+	;perpy=1.0/sqrt(2.0+((-normy-normz)/normx)^2)
+	;perpz=1.0/sqrt(2.0+((-normy-normz)/normx)^2)
     endif
 
+;test plot of the plane
+;p=plot3d(pplane(0,0,0)*[1,1],pplane(1,0,0)*[1,1],pplane(2,0,0)*[1,1],'bo')
+;for j=1,2 do begin
+;for k=1,2 do begin
+;    p=plot3d(pplane(0,j,k)*[1,1],pplane(1,j,k)*[1,1],pplane(2,j,k)*[1,1],/overplot,'bo')
+;end
+;end
+
+;stop
     ;print,normx,normy,gradx(col(i),row(i)),grady(col(i),row(i))
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -499,7 +539,7 @@ for i=0,n_elements(col)-1 do begin
     if ndim eq 2 then vperp=normx*vxnorm+normy*vynorm
     if ndim eq 3 then vperp=normx*vxnorm+normy*vynorm+normy*vznorm
     if ndim eq 2 then vpar=perpx*vxnorm+perpy*vynorm
-    ;if ndim eq 3 then vpar=perpx*vxnorm+perpy*vynorm+perpz*vznorm ;Defined elsewhere
+    if ndim eq 3 then vpar=perpx*vxnorm+perpy*vynorm+perpz*vznorm
 
 
     if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
@@ -511,15 +551,20 @@ for i=0,n_elements(col)-1 do begin
 	endif
 	if ndim eq 3 then begin
 	    bperp=normx*bxnorm+normy*bynorm+normz*bznorm
-	    bmag2=bxnorm^2+bynorm^2+bznorm^2
-	    vmag2=vxnorm^2+vynorm^2+vznorm^2
-	    sinang=sqrt(((bmag2-bperp^2)*vperp - vmag2+vperp^2)/(bmag2+vperp^2-vmag2-bperp^2))
-	    sinang(where (sinang gt  1.0))=1.0
-	    sinang(where (sinang lt -1.0))=-1.0
-	    ang2=asin(sinang)
-            vpar=sqrt(vmag2-vperp^2)*sin(ang2)
-            bpar=sqrt(bmag2-bperp^2)*sin(ang2)
+	    bpar=perpx*bxnorm+perpy*bynorm+perpz*bznorm
+;	    bmag2=bxnorm^2+bynorm^2+bznorm^2
+;	    vmag2=vxnorm^2+vynorm^2+vznorm^2
+;	    sinang=sqrt(((bmag2-bperp^2)*vperp - vmag2+vperp^2)/(bmag2+vperp^2-vmag2-bperp^2))
+;	    sinang(where (sinang gt  1.0))=1.0
+;	    sinang(where (sinang lt -1.0))=-1.0;
+;	    ang2=asin(sinang)
+;            vpar=sqrt(vmag2-vperp^2)*sin(ang2)
+;            bpar=sqrt(bmag2-bperp^2)*sin(ang2)
 	    ang=atan(bpar/bperp)
+        for bi=0,n_elements(bperp)-1 do begin
+            if abs(bperp(bi)) lt 1.0e-8 then ang(bi)=1.5707964
+        end
+;print,ang
 	endif
     endif
 
@@ -557,6 +602,7 @@ for i=0,n_elements(col)-1 do begin
     vfast2=0.5*(cs2+va2+sqrt((cs2+va2)^2 - 4.0*va2*cs2*(cos(ang))^2))
     endif
 
+;print,vap2,vslow2,vfast2
 
     vf=vperp
 
