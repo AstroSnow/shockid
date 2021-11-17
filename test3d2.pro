@@ -8,7 +8,7 @@ RESOLVE_ROUTINE, 'shockid3d_fun2';, /IS_FUNCTION
 fname='../../datadrive/simdata/MHD_OZ_3D'
 
 ;Time step to read in
-t=2
+t=3
 
 ;Read in the data
 rdmpi,ds,datapath=fname,time_step=t
@@ -29,8 +29,9 @@ rdmpi,ds,datapath=fname,time_step=t
 ;        ndim=3 - this is should be left as is
 shockid3d_fun2,shocks,ds.x,ds.y,ds.z,ds.ro_p,ds.vx_p,ds.vy_p,ds.vz_p,ds.bx,ds.by,ds.bz,ds.pr_p,ndim=3
 
-; Print out the sizes of the elements of a
-help,shocks
+; Print out the number of shocks
+print,'Slow',n_elements(shocks.slowx)
+print,'Fast',n_elements(shocks.fastx)
 
 ;Save the shocks
 save,shocks,filename='test3d2.dat'
@@ -43,8 +44,8 @@ fy=shocks.fasty(where(shocks.fastz eq 100))
 sx=shocks.slowx(where(shocks.slowz eq 100))
 sy=shocks.slowy(where(shocks.slowz eq 100))
 c=contour(ds.ro_p(*,*,100),/fill,n_levels=101,rgb_tab=0)
-p=plot(fx+6,fy+6,'b.',/overplot) ;The 6 is there because of the ghost cells in my code that the shockid routine assumes. We can change this quite easily.
-p=plot(sx+6,sy+6,'r.',/overplot)
+p=plot(fx+6,fy+6,'b.',/overplot,sym_thick=2) ;The 6 is there because of the ghost cells in my code that the shockid routine assumes. We can change this quite easily.
+p=plot(sx+6,sy+6,'r.',/overplot,sym_thick=2)
 
 stop
 

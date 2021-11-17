@@ -27,14 +27,14 @@ RESOLVE_ROUTINE, 'shockplane3d', /IS_FUNCTION
 ;Parameters for shock limits
 convl=0.01 ;Convergence threshold
 avecyl=3 ;Cylinder to average over
-smthfac=3 ;smoothing factor (1=no smoothing)
-shocktol=0.05 ;tolerence for the shock transitions
+smthfac=1 ;smoothing factor (1=no smoothing)
+shocktol=0.1 ;tolerence for the shock transitions
 bulkspeed=0 ; Use the bulk sound and alfven speeds or individual
 species='plasma' ; plasma or neutral
 ;species='neutral' ; plasma or neutral
 
 ;Data handeling flags
-data_subset=0 ;flag to subset the data
+data_subset=1 ;flag to subset the data
 data_save=0
 
 
@@ -107,7 +107,7 @@ endif
 ;endif
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;Step i: identify candidate cells based on 
+;Step i: identify candidate cells based on maximum density gradient
 print,'Identify candidate cells'
 gradmag=sqrt(gradx^2+grady^2+gradz^2)
 
@@ -128,6 +128,59 @@ col = index mod ncol
 row = (index / ncol) mod nrow
 zrow = index / (nrow*ncol)
 ;p=plot3D(col,row,zrow,'.')
+;stop
+endif
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Filter the candidate cells
+if data_subset eq 1 then begin
+print,'Subsetting data'
+xminf=0.0
+xmaxf=1.0
+yminf=0.0
+ymaxf=1.0
+zminf=z(90)
+zmaxf=z(110)
+
+col2=[]
+row2=[]
+zrow2=[]
+
+;stop
+
+;Slow version
+;for i=0,n_elements(row)-1 do begin
+;    if ndim eq 2 then begin
+;    if (x(col(i)) LT xmaxf) and (x(col(i)) GT xminf) and (y(row(i)) LT ymaxf) and (y(row(i)) GT yminf) then begin
+;            row2=[row2,row(i)]
+;            col2=[col2,col(i)]
+;    endif
+;    endif
+;    if ndim eq 3 then begin
+;    if (x(col(i)) LT xmaxf) and (x(col(i)) GT xminf) and $
+;	(y(row(i)) LT ymaxf) and (y(row(i)) GT yminf) and $
+;	(z(zrow(i)) LT zmaxf) and (z(zrow(i)) GT zminf) then begin
+;            row2=[row2,row(i)]
+;            col2=[col2,col(i)]
+;	    zrow2=[zrow2,zrow(i)]
+;    endif
+;    endif
+;endfor
+
+;Fast version
+if ndim eq 3 then begin
+xt=where((x(col) ge xminf) AND (x(col) le xmaxf) $
+    AND  (y(row) ge yminf) AND (y(row) le ymaxf) $
+    AND  (z(zrow) ge zminf) AND (z(zrow) le zmaxf))
+col2=col(xt)
+row2=row(xt)
+zrow2=zrow(xt)
+endif
+
+col=col2
+row=row2
+if ndim eq 3 then zrow=zrow2
+
 ;stop
 endif
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -157,18 +210,18 @@ for i=0,n_elements(col)-1 do begin
 ;    perpx=(-normy/normx)/sqrt(normy^2/normx^2+1.0)
 ;    perpy=1.0/sqrt(normy^2/normx^2+1.0)
 
-    tempx=indgen(2*avecyl+1)-avecyl+col(i)
-    tempy=indgen(2*avecyl+1)-avecyl+row(i)
-    tempx2=indgen(2*avecyl+1)-avecyl
-    tempy2=indgen(2*avecyl+1)-avecyl
+    tempx=indgen(2*2+1)-2+col(i)
+    tempy=indgen(2*2+1)-2+row(i)
+    tempx2=indgen(2*2+1)-2
+    tempy2=indgen(2*2+1)-2
 
     if ndim eq 3 then begin
-        tempz=indgen(2*avecyl+1)-avecyl+zrow(i)
-        tempz2=indgen(2*avecyl+1)-avecyl
+        tempz=indgen(2*2+1)-2+zrow(i)
+        tempz2=indgen(2*2+1)-avecyl
     endif
 
     ;use periodic BC to fix negative values
-    for ii=0,2*avecyl do begin
+    for ii=0,2*2 do begin
         if ndim eq 2 then begin
             if tempx(ii) lt 0 then tempx(ii)=N_elements(divv(*,0))+tempx(ii)
             if tempy(ii) lt 0 then tempy(ii)=N_elements(divv(0,*))+tempy(ii)
@@ -181,7 +234,7 @@ for i=0,n_elements(col)-1 do begin
     endfor
 
     ;use periodic BC to fix outside grid values
-    for ii=0,2*avecyl do begin
+    for ii=0,2*2 do begin
         if ndim eq 2 then begin
             if tempx(ii) gt n_elements(divv(*,0))-1 then tempx(ii)=tempx(ii)-N_elements(divv(*,0))
             if tempy(ii) gt n_elements(divv(0,*))-1 then tempy(ii)=tempy(ii)-N_elements(divv(0,*))
@@ -196,21 +249,21 @@ for i=0,n_elements(col)-1 do begin
 
     ;Interpolate the values normal to the shock NOTE: THES ARE NOT PARALLEL TO SHOCK YET!
     if ndim eq 2 then $
-    ronorm=shocknormvals(ro,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
+    ronorm=shocknormvals(ro,tempx,tempy,tempx2,tempy2,2,normx,normy)
 
     if ndim eq 3 then begin
-    tempxyz=dblarr(6,2*avecyl+1)
+    tempxyz=dblarr(6,2*2+1)
     tempxyz(0,*)=tempx
     tempxyz(1,*)=tempy
     tempxyz(2,*)=tempz
     tempxyz(3,*)=tempx2
     tempxyz(4,*)=tempy2
     tempxyz(5,*)=tempz2
-    ronorm=shocknormvals3D(ro,tempxyz,avecyl,normx,normy,normz)
+    ronorm=shocknormvals3D(ro,tempxyz,2,normx,normy,normz)
     endif
 
     a=max(abs(deriv(ronorm)),b)
-    if b eq avecyl then begin
+    if b eq 2 then begin
         row2=[row2,row(i)]
         col2=[col2,col(i)]
 	if ndim eq 3 then zrow2=[zrow2,zrow(i)]
@@ -224,43 +277,6 @@ if ndim eq 3 then zrow=zrow2
 ;print,'ONLY DONE UP TO HERE'
 ;stop
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;Filter the candidate cells for testing
-if data_subset eq 1 then begin
-print,'Subsetting data'
-xminf=0.28
-xmaxf=0.35
-yminf=0.22
-ymaxf=0.3
-zminf=0.1
-zmaxf=0.2
-
-col2=[]
-row2=[]
-zrow2=[]
-for i=0,n_elements(row)-1 do begin
-    if ndim eq 2 then begin
-    if (x(col(i)) LT xmaxf) and (x(col(i)) GT xminf) and (y(row(i)) LT ymaxf) and (y(row(i)) GT yminf) then begin
-            row2=[row2,row(i)]
-            col2=[col2,col(i)]
-    endif
-    endif
-    if ndim eq 3 then begin
-    if (x(col(i)) LT xmaxf) and (x(col(i)) GT xminf) and $
-	(y(row(i)) LT ymaxf) and (y(row(i)) GT yminf) and $
-	(z(zrow(i)) LT zmaxf) and (z(zrow(i)) GT zminf) then begin
-            row2=[row2,row(i)]
-            col2=[col2,col(i)]
-	    zrow2=[zrow2,zrow(i)]
-    endif
-    endif
-endfor
-
-col=col2
-row=row2
-if ndim eq 3 then zrow=zrow2
-
-endif
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Arrays for the shock locations
 fastx=[]
