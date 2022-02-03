@@ -7,7 +7,9 @@ tarr=[30,50,60,80,100]
 
 for ti=0,n_elements(tarr)-1 do begin
 
-fname='Sims/MHD_test' & tread=tarr(ti)
+;fname='Sims/MHD_test' & tread=tarr(ti)
+;fname='/home/snow/datadrive/simdata/MHD_OZ_1024/Data' & tread=tarr(ti)
+fname='/home/snow/datadrive/OZMHD/PIP_OZ_1024_O4_ac100' & tread=tarr(ti)
 
 shockid_fun,shocks,fname=fname,tread=tread
 
@@ -32,7 +34,7 @@ pi3=plot(1.0*shocks.int3x/(1.0*n_elements(shocks.x)-xshift),1.0*shocks.int3y/(1.
 
 pi4=plot(1.0*shocks.int4x/(1.0*n_elements(shocks.x)-xshift),1.0*shocks.int4y/(1.0*n_elements(shocks.y)-yshift),/overplot,'.g',sym_thick=sth)
 
-i.save,'timeseries_MHD_'+strtrim(tread,1)+'.pdf'
+i.save,'timeseries_PIP_'+strtrim(tread,1)+'.pdf'
 
 i.close
 

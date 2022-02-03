@@ -11,6 +11,7 @@ RESOLVE_ROUTINE, 'datatype', /IS_FUNCTION
 RESOLVE_ROUTINE, 'shocknormvals', /IS_FUNCTION
 RESOLVE_ROUTINE, 'shocknormvals3d', /IS_FUNCTION
 RESOLVE_ROUTINE, 'shockplane3d', /IS_FUNCTION
+RESOLVE_ROUTINE, 'shockframecon', /IS_FUNCTION
 
 ;Input directory
 ;fname='../MHD_test'
@@ -26,15 +27,15 @@ RESOLVE_ROUTINE, 'shockplane3d', /IS_FUNCTION
 ;rdmpi,ds,datapath=fname,time_step=tread;,var=['ro_p','vx_p','vy_p','vz_p']
 ;Parameters for shock limits
 convl=0.01 ;Convergence threshold
-avecyl=3 ;Cylinder to average over
+avecyl=5 ;Cylinder to average over
 smthfac=1 ;smoothing factor (1=no smoothing)
-shocktol=0.1 ;tolerence for the shock transitions
+shocktol=0.05 ;tolerence for the shock transitions
 bulkspeed=0 ; Use the bulk sound and alfven speeds or individual
 species='plasma' ; plasma or neutral
 ;species='neutral' ; plasma or neutral
 
 ;Data handeling flags
-data_subset=1 ;flag to subset the data
+data_subset=0 ;flag to subset the data
 data_save=0
 
 
@@ -44,7 +45,7 @@ fl_pip=0
 
 ;Define simulation grid
 print,'Removing ghost cells'
-margin=6
+margin=2
 
 ;egx=N_elements(ds.x)-1
 ;egy=N_elements(ds.y)-1
@@ -89,6 +90,10 @@ smooth(vzg(margin:egx-margin,margin:egy-margin,margin-1:egz-margin-1),smthfac))/
 ;    endif
 
 endif
+
+;i=image(divv(*,*,0))
+;cb=colorbar(target=[i])
+;stop
 
 ;Maximum gradient of density
 print,'Calculating density gradients'
@@ -135,12 +140,12 @@ endif
 ;Filter the candidate cells
 if data_subset eq 1 then begin
 print,'Subsetting data'
-xminf=0.0
-xmaxf=1.0
-yminf=0.0
-ymaxf=1.0
-zminf=z(90)
-zmaxf=z(110)
+xminf=0.1
+xmaxf=0.9
+yminf=0.1
+ymaxf=0.9
+zminf=z(90);0.45
+zmaxf=z(110);0.55
 
 col2=[]
 row2=[]
@@ -175,6 +180,12 @@ xt=where((x(col) ge xminf) AND (x(col) le xmaxf) $
 col2=col(xt)
 row2=row(xt)
 zrow2=zrow(xt)
+endif
+if ndim eq 2 then begin
+xt=where((x(col) ge xminf) AND (x(col) le xmaxf) $
+    AND  (y(row) ge yminf) AND (y(row) le ymaxf))
+col2=col(xt)
+row2=row(xt)
 endif
 
 col=col2
@@ -217,7 +228,7 @@ for i=0,n_elements(col)-1 do begin
 
     if ndim eq 3 then begin
         tempz=indgen(2*2+1)-2+zrow(i)
-        tempz2=indgen(2*2+1)-avecyl
+        tempz2=indgen(2*2+1)-2
     endif
 
     ;use periodic BC to fix negative values
@@ -261,7 +272,8 @@ for i=0,n_elements(col)-1 do begin
     tempxyz(5,*)=tempz2
     ronorm=shocknormvals3D(ro,tempxyz,2,normx,normy,normz)
     endif
-
+;print,ronorm
+;stop
     a=max(abs(deriv(ronorm)),b)
     if b eq 2 then begin
         row2=[row2,row(i)]
@@ -352,6 +364,8 @@ for i=0,n_elements(col)-1 do begin
         normz=gradz(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
     endif
 
+    ;print,normx,normy,normz
+;stop
     ;Find perpendicular direction too
     perpx=(-normy/normx)/sqrt(normy^2/normx^2+1.0)
     perpy=1.0/sqrt(normy^2/normx^2+1.0)
@@ -362,36 +376,80 @@ for i=0,n_elements(col)-1 do begin
     if ndim eq 3 then begin
     ;Get the plane perpendicular to the shock 
     pplane=shockplane3d(normx,normy,normz)
-    ;Get the density in this plane
+    ;Get the density in this plane; Actually need a few variables for maximum gradients
     ppro=dblarr(3,3)
+    ppvx=dblarr(3,3)
+    ppvy=dblarr(3,3)
+    ppvz=dblarr(3,3)
+    ppbx=dblarr(3,3)
+    ppby=dblarr(3,3)
+    ppbz=dblarr(3,3)
+    pppr=dblarr(3,3)
     for j=0,2 do begin
     for k=0,2 do begin
         ppro(j,k)=interpolate(ro,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+        ppvx(j,k)=interpolate(vx,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+        ppvy(j,k)=interpolate(vy,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+        ppvz(j,k)=interpolate(vz,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+        ppbx(j,k)=interpolate(bx,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+        ppby(j,k)=interpolate(by,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+        ppbz(j,k)=interpolate(bz,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+        pppr(j,k)=interpolate(pr,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
     end
     end
-    ;get the gradient of thedensity along the plane
-    ppgrox=ppro(2,1)-ppro(0,1)
-    ppgroy=ppro(1,2)-ppro(1,0)
-    if abs(ppgrox) lt 1.0e-8 then begin
+    ;get the gradient of all variables along the plane
+    ppgrox=max([ppro(2,1)-ppro(0,1),$
+                ppvx(2,1)-ppvx(0,1),$
+                ppvy(2,1)-ppvy(0,1),$
+                ppvz(2,1)-ppvz(0,1),$
+                ppbx(2,1)-ppbx(0,1),$
+                ppby(2,1)-ppby(0,1),$
+                ppbz(2,1)-ppbz(0,1),$
+                pppr(2,1)-pppr(0,1)])
+    ppgroy=max([ppro(1,2)-ppro(1,0),$
+                ppvx(1,2)-ppvx(1,0),$
+                ppvy(1,2)-ppvy(1,0),$
+                ppvz(1,2)-ppvz(1,0),$
+                ppbx(1,2)-ppbx(1,0),$
+                ppby(1,2)-ppby(1,0),$
+                ppbz(1,2)-ppbz(1,0),$
+                pppr(1,2)-pppr(1,0)])
+    if abs(ppgrox+ppgroy) lt 1.0e-8 then begin
+;print,'this doesnt work for z direction'
+        if (abs(normx) eq 1) then perparr=[normy,normx,normz]
+        if (abs(normy) eq 1) then perparr=[normy,normx,normz]
+        if (abs(normz) eq 1) then perparr=[normz,normy,normx]
+    perpx=perparr(0)
+    perpy=perparr(1)
+    perpz=perparr(2)
+    endif else if abs(ppgrox) lt 1.0e-8 then begin
         ppx=0.0
         ppy=1.0
-    endif else if abs(ppgroy) lt 1.0e-8 then begin
-        ppx=1.0
-        ppy=0.0
-    endif else begin
-        ppx=ppgrox/sqrt(ppgrox^2+ppgroy^2)
-        ppy=ppgroy/sqrt(ppgrox^2+ppgroy^2)
-    endelse
-    ;get the perp vectors
     perpx=normy*ppx-normz*ppy
     perpy=-normx*ppx
     perpz=normx*ppy
+    endif else if abs(ppgroy) lt 1.0e-8 then begin
+        ppx=1.0
+        ppy=0.0
+    perpx=normy*ppx-normz*ppy
+    perpy=-normx*ppx
+    perpz=normx*ppy
+    endif else begin
+        ppx=ppgrox/sqrt(ppgrox^2+ppgroy^2)
+        ppy=ppgroy/sqrt(ppgrox^2+ppgroy^2)
+    perpx=normy*ppx-normz*ppy
+    perpy=-normx*ppx
+    perpz=normx*ppy
+    endelse
+    ;get the perp vectors
+;print,perpx,perpy,perpz
     ;Make sure its a unit vector
     perpt=sqrt(perpx^2+perpy^2+perpz^2)
     perpx=perpx/perpt
     perpy=perpy/perpt
     perpz=perpz/perpt    
 ;print,perpx,perpy,perpz,perpt
+;stop
 	;perpx=(-normy-normz)/normx/sqrt(2.0+((-normy-normz)/normx)^2)
 	;perpy=1.0/sqrt(2.0+((-normy-normz)/normx)^2)
 	;perpz=1.0/sqrt(2.0+((-normy-normz)/normx)^2)
@@ -485,7 +543,7 @@ for i=0,n_elements(col)-1 do begin
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;Calculate the parallel and perpendicular velocity and magnetic field
     if ndim eq 2 then vperp=normx*vxnorm+normy*vynorm
-    if ndim eq 3 then vperp=normx*vxnorm+normy*vynorm+normy*vznorm
+    if ndim eq 3 then vperp=normx*vxnorm+normy*vynorm+normz*vznorm
     if ndim eq 2 then vpar=perpx*vxnorm+perpy*vynorm
     if ndim eq 3 then vpar=perpx*vxnorm+perpy*vynorm+perpz*vznorm
 
@@ -537,8 +595,14 @@ for i=0,n_elements(col)-1 do begin
 
     ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
     ;Estimate shock speed 
-    vs=con_mas
+    vsa=con_mas
 
+;An attempt at using the most conservative frame. Doesn't work yet
+;    vs=shockframecon(ronorm(ipre),vperp(ipre),vpar(ipre),bxnorm(ipre),bynorm(ipre),prnorm(ipre),$
+;            ronorm(ipos),vperp(ipos),vpar(ipos),bxnorm(ipos),bynorm(ipos),prnorm(ipos))
+
+vs=vsa
+;print,'shock speed',vs,vsa
 
     ;Calculate Mach numbers
     cs2=5.0/3.0*prnorm/ronorm
@@ -550,7 +614,7 @@ for i=0,n_elements(col)-1 do begin
     vfast2=0.5*(cs2+va2+sqrt((cs2+va2)^2 - 4.0*va2*cs2*(cos(ang))^2))
     endif
 
-;print,vap2,vslow2,vfast2
+;print,'wave speeds',vap2,vslow2,vfast2
 
     vf=vperp
 
@@ -651,11 +715,14 @@ if (species ne 'neutral') or (fl_pip eq 0) then begin
     endif
 endif
 
+;print,'states',tpre,tpos
+;stop
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Check for maximum density gradient along the normal
     rescode='Not local maximum density gradient'
-    a=max(abs(deriv(ronorm)),b)
-    if b eq avecyl then begin
+;    a=max(abs(deriv(ronorm)),b)
+;    if b eq avecyl then begin
 
     rescode='No transition satisfied'
 
@@ -753,7 +820,7 @@ endif
 ;        arrtype(i)=2
 ;    endif    
 
-    endif
+  ;  endif
 
 ;    print,i,(n_elements(col)-1),rescode
 endfor

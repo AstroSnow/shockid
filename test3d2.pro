@@ -7,11 +7,19 @@ RESOLVE_ROUTINE, 'shockid3d_fun2';, /IS_FUNCTION
 ;fname='../../datadrive/PIPstab3D/PIP3D/'
 fname='../../datadrive/simdata/MHD_OZ_3D'
 
+
 ;Time step to read in
-t=3
+t=7
 
 ;Read in the data
 rdmpi,ds,datapath=fname,time_step=t
+
+;Some info about the numerical grid
+margin=1 ; number of ghost cells either side
+egx=N_elements(ds.x)-1
+egy=N_elements(ds.y)-1
+egz=N_elements(ds.z)-1
+smthfac=1
 
 ;Run the shock detection routine 'shockid3d_fun2'
 ;Outputs: shocks - structure of all the detected shocks
@@ -36,17 +44,39 @@ print,'Fast',n_elements(shocks.fastx)
 ;Save the shocks
 save,shocks,filename='test3d2.dat'
 
+;Calculate divergence of velocity
+divv=(smooth(ds.vx_p(margin+1:egx-margin+1,margin:egy-margin,margin:egz-margin),smthfac)-$
+smooth(ds.vx_p(margin-1:egx-margin-1,margin:egy-margin,margin:egz-margin),smthfac))/(ds.x(10)-ds.x(8)) $
+    +(smooth(ds.vy_p(margin:egx-margin,margin+1:egy-margin+1,margin:egz-margin),smthfac)-$
+smooth(ds.vy_p(margin:egx-margin,margin-1:egy-margin-1,margin:egz-margin),smthfac))/(ds.y(10)-ds.y(8))$
+    +(smooth(ds.vz_p(margin:egx-margin,margin:egy-margin,margin+1:egz-margin+1),smthfac)-$
+smooth(ds.vz_p(margin:egx-margin,margin:egy-margin,margin-1:egz-margin-1),smthfac))/(ds.z(10)-ds.z(8))
+
 ;Some basic plotting routines
 
 ;Plot a 2D slice of the data at z=100 grid cell
-fx=shocks.fastx(where(shocks.fastz eq 100))
-fy=shocks.fasty(where(shocks.fastz eq 100))
-sx=shocks.slowx(where(shocks.slowz eq 100))
-sy=shocks.slowy(where(shocks.slowz eq 100))
-c=contour(ds.ro_p(*,*,100),/fill,n_levels=101,rgb_tab=0)
-p=plot(fx+6,fy+6,'b.',/overplot,sym_thick=2) ;The 6 is there because of the ghost cells in my code that the shockid routine assumes. We can change this quite easily.
-p=plot(sx+6,sy+6,'r.',/overplot,sym_thick=2)
+fx=shocks.fastx;(where(shocks.fastz eq 100))
+fy=shocks.fasty;(where(shocks.fastz eq 100))
+sx=shocks.slowx;(where(shocks.slowz eq 100))
+sy=shocks.slowy;(where(shocks.slowz eq 100))
 
+;Use the density as a background
+c=image(ds.ro_p(*,*,100),rgb_tab=0)
+p=plot(fx+margin,fy+margin,'b.',/overplot,sym_thick=2) ;The 6 is there because of the ghost cells in my code that the shockid routine assumes. We can change this quite easily.
+p=plot(sx+margin,sy+margin,'r.',/overplot,sym_thick=2)
+
+;Use the divergence of v as a background
+;c=contour(divv(*,*,100),/fill,n_levels=101,rgb_tab=0)
+;p=plot(fx+margin,fy,'b.',/overplot,sym_thick=2) ;Margin not needed here
+;p=plot(sx+margin,sy,'r.',/overplot,sym_thick=2)
+
+
+ps=plot3d(shocks.slowx,shocks.slowy,shocks.slowz,'r.')
+ps.sym_size=4 
+pf=plot3d(shocks.fastx,shocks.fasty,shocks.fastz,'b.',/overplot)
+pf.sym_size=4 
+pi4=plot3d(shocks.int4x,shocks.int4y,shocks.int4z,'g.',/overplot)
+pi4.sym_size=4 
 stop
 
 ;3D plot of the shocks - VERY SLOW TO RUN
