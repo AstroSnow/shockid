@@ -416,6 +416,7 @@ for i=0,n_elements(col)-1 do begin
                 pppr(1,2)-pppr(1,0)])
     if abs(ppgrox+ppgroy) lt 1.0e-8 then begin
 ;print,'this doesnt work for z direction'
+        perparr=[normy,normx,normz]
         if (abs(normx) eq 1) then perparr=[normy,normx,normz]
         if (abs(normy) eq 1) then perparr=[normy,normx,normz]
         if (abs(normz) eq 1) then perparr=[normz,normy,normx]

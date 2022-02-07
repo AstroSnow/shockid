@@ -9,7 +9,7 @@ fname='../../datadrive/simdata/MHD_OZ_3D'
 
 
 ;Time step to read in
-t=7
+t=10
 
 ;Read in the data
 rdmpi,ds,datapath=fname,time_step=t
@@ -42,7 +42,7 @@ print,'Slow',n_elements(shocks.slowx)
 print,'Fast',n_elements(shocks.fastx)
 
 ;Save the shocks
-save,shocks,filename='test3d2.dat'
+save,shocks,filename='test3d2_t10.dat'
 
 ;Calculate divergence of velocity
 divv=(smooth(ds.vx_p(margin+1:egx-margin+1,margin:egy-margin,margin:egz-margin),smthfac)-$
@@ -55,10 +55,10 @@ smooth(ds.vz_p(margin:egx-margin,margin:egy-margin,margin-1:egz-margin-1),smthfa
 ;Some basic plotting routines
 
 ;Plot a 2D slice of the data at z=100 grid cell
-fx=shocks.fastx;(where(shocks.fastz eq 100))
-fy=shocks.fasty;(where(shocks.fastz eq 100))
-sx=shocks.slowx;(where(shocks.slowz eq 100))
-sy=shocks.slowy;(where(shocks.slowz eq 100))
+fx=shocks.fastx(where((shocks.fastz le 110) and (shocks.fastz ge 90)))
+fy=shocks.fasty(where((shocks.fastz le 110) and (shocks.fastz ge 90)))
+sx=shocks.slowx(where((shocks.slowz le 110) and (shocks.slowz ge 90)))
+sy=shocks.slowy(where((shocks.slowz le 110) and (shocks.slowz ge 90)))
 
 ;Use the density as a background
 c=image(ds.ro_p(*,*,100),rgb_tab=0)
