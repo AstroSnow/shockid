@@ -31,11 +31,11 @@ avecyl=5 ;Cylinder to average over
 smthfac=1 ;smoothing factor (1=no smoothing)
 shocktol=0.05 ;tolerence for the shock transitions
 bulkspeed=0 ; Use the bulk sound and alfven speeds or individual
-species='plasma' ; plasma or neutral
-;species='neutral' ; plasma or neutral
+;species='plasma' ; plasma or neutral
+species='neutral' ; plasma or neutral
 
 ;Data handeling flags
-data_subset=0 ;flag to subset the data
+data_subset=1 ;flag to subset the data
 data_save=0
 
 
@@ -69,9 +69,11 @@ if (ndim eq 3) then z=gridz(margin:egz-margin)
         vx=smooth(vxg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
         vy=smooth(vyg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
         vz=smooth(vzg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-        bx=smooth(bxg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-        by=smooth(byg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-        bz=smooth(bzg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
+            if species eq 'plasma' then begin
+                bx=smooth(bxg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
+                by=smooth(byg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
+                bz=smooth(bzg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
+            endif
         pr=smooth(prg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
     endif
 ;endif
@@ -317,35 +319,6 @@ int4x=[]
 int4y=[]
 int4z=[]
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-if data_save eq 1 then begin
-;create arrays to store shock normal data
-arrronorm=dblarr(N_elements(col),avecyl*2+1)
-;arrvxnorm=dblarr(N_elements(col),avecyl*2+1)
-;arrvynorm=dblarr(N_elements(col),avecyl*2+1)
-;arrbxnorm=dblarr(N_elements(col),avecyl*2+1)
-;arrbynorm=dblarr(N_elements(col),avecyl*2+1)
-arrprnorm=dblarr(N_elements(col),avecyl*2+1)
-arrvpar=dblarr(N_elements(col),avecyl*2+1)
-arrvperp=dblarr(N_elements(col),avecyl*2+1)
-arrbpar=dblarr(N_elements(col),avecyl*2+1)
-arrbperp=dblarr(N_elements(col),avecyl*2+1)
-arrvslow2=dblarr(N_elements(col),avecyl*2+1)
-arrvalf2=dblarr(N_elements(col),avecyl*2+1)
-arrvfast2=dblarr(N_elements(col),avecyl*2+1)
-arrmf=dblarr(N_elements(col),avecyl*2+1)
-arrma=dblarr(N_elements(col),avecyl*2+1)
-arrms=dblarr(N_elements(col),avecyl*2+1)
-arrtype=dblarr(N_elements(col))
-arrvs=dblarr(N_elements(col))
-;arrnx=dblarr(N_elements(col))
-;arrny=dblarr(N_elements(col))
-;arrpx=dblarr(N_elements(col))
-;arrpy=dblarr(N_elements(col))
-;arrrescode=dblarr(N_elements(col))
-end
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 print,'Begin loop for n=',n_elements(col)
 ;loop over candidates
 for i=0,n_elements(col)-1 do begin
@@ -391,29 +364,45 @@ for i=0,n_elements(col)-1 do begin
         ppvx(j,k)=interpolate(vx,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
         ppvy(j,k)=interpolate(vy,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
         ppvz(j,k)=interpolate(vz,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
-        ppbx(j,k)=interpolate(bx,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
-        ppby(j,k)=interpolate(by,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
-        ppbz(j,k)=interpolate(bz,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+        if species eq 'plasma' then begin
+            ppbx(j,k)=interpolate(bx,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+            ppby(j,k)=interpolate(by,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+            ppbz(j,k)=interpolate(bz,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+        endif
         pppr(j,k)=interpolate(pr,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
     end
     end
     ;get the gradient of all variables along the plane
-    ppgrox=max([ppro(2,1)-ppro(0,1),$
-                ppvx(2,1)-ppvx(0,1),$
-                ppvy(2,1)-ppvy(0,1),$
-                ppvz(2,1)-ppvz(0,1),$
-                ppbx(2,1)-ppbx(0,1),$
-                ppby(2,1)-ppby(0,1),$
-                ppbz(2,1)-ppbz(0,1),$
-                pppr(2,1)-pppr(0,1)])
-    ppgroy=max([ppro(1,2)-ppro(1,0),$
-                ppvx(1,2)-ppvx(1,0),$
-                ppvy(1,2)-ppvy(1,0),$
-                ppvz(1,2)-ppvz(1,0),$
-                ppbx(1,2)-ppbx(1,0),$
-                ppby(1,2)-ppby(1,0),$
-                ppbz(1,2)-ppbz(1,0),$
-                pppr(1,2)-pppr(1,0)])
+    if species eq 'plasma' then begin
+        ppgrox=max([ppro(2,1)-ppro(0,1),$
+                    ppvx(2,1)-ppvx(0,1),$
+                    ppvy(2,1)-ppvy(0,1),$
+                    ppvz(2,1)-ppvz(0,1),$
+                    ppbx(2,1)-ppbx(0,1),$
+                    ppby(2,1)-ppby(0,1),$
+                    ppbz(2,1)-ppbz(0,1),$
+                    pppr(2,1)-pppr(0,1)])
+        ppgroy=max([ppro(1,2)-ppro(1,0),$
+                    ppvx(1,2)-ppvx(1,0),$
+                    ppvy(1,2)-ppvy(1,0),$
+                    ppvz(1,2)-ppvz(1,0),$
+                    ppbx(1,2)-ppbx(1,0),$
+                    ppby(1,2)-ppby(1,0),$
+                    ppbz(1,2)-ppbz(1,0),$
+                    pppr(1,2)-pppr(1,0)])
+    endif
+    if species eq 'neutral' then begin
+        ppgrox=max([ppro(2,1)-ppro(0,1),$
+                    ppvx(2,1)-ppvx(0,1),$
+                    ppvy(2,1)-ppvy(0,1),$
+                    ppvz(2,1)-ppvz(0,1),$
+                    pppr(2,1)-pppr(0,1)])
+        ppgroy=max([ppro(1,2)-ppro(1,0),$
+                    ppvx(1,2)-ppvx(1,0),$
+                    ppvy(1,2)-ppvy(1,0),$
+                    ppvz(1,2)-ppvz(1,0),$
+                    pppr(1,2)-pppr(1,0)])
+    endif
     if abs(ppgrox+ppgroy) lt 1.0e-8 then begin
 ;print,'this doesnt work for z direction'
         perparr=[normy,normx,normz]
@@ -515,7 +504,7 @@ for i=0,n_elements(col)-1 do begin
 	vynorm=shocknormvals(vy,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
 	prnorm=shocknormvals(pr,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
 
-	if (species ne 'neutral') or (fl_pip eq 0) then begin
+	if (species ne 'neutral') then begin
 	bxnorm=shocknormvals(bx,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
 	bynorm=shocknormvals(by,tempx,tempy,tempx2,tempy2,avecyl,normx,normy)
 	endif
@@ -533,11 +522,11 @@ for i=0,n_elements(col)-1 do begin
     vynorm=shocknormvals3d(vy,tempxyz,avecyl,normx,normy,normz)
     vznorm=shocknormvals3d(vz,tempxyz,avecyl,normx,normy,normz)
     prnorm=shocknormvals3d(pr,tempxyz,avecyl,normx,normy,normz)
-	;if (species ne 'neutral') or (ds.fl_pip eq 0) then begin
+	if (species ne 'neutral') then begin
         bxnorm=shocknormvals3d(bx,tempxyz,avecyl,normx,normy,normz)
         bynorm=shocknormvals3d(by,tempxyz,avecyl,normx,normy,normz)
         bznorm=shocknormvals3d(bz,tempxyz,avecyl,normx,normy,normz)
-	;endif
+	endif
     endif
 
 
@@ -549,7 +538,7 @@ for i=0,n_elements(col)-1 do begin
     if ndim eq 3 then vpar=perpx*vxnorm+perpy*vynorm+perpz*vznorm
 
 
-    if (species ne 'neutral') or (fl_pip eq 0) then begin
+    if (species ne 'neutral') then begin
 	if ndim eq 2 then begin
 	    bperp=normx*bxnorm+normy*bynorm
 	    ;bperp=sqrt(bxnorm^2+bynorm^2-bpar^2)
@@ -607,7 +596,7 @@ vs=vsa
 
     ;Calculate Mach numbers
     cs2=5.0/3.0*prnorm/ronorm
-    if (species ne 'neutral') or (fl_pip eq 0) then begin
+    if (species ne 'neutral') then begin
     if ndim eq 2 then va2=(bxnorm^2+bynorm^2)/ronorm
     if ndim eq 3 then va2=(bxnorm^2+bynorm^2+bznorm^2)/ronorm
     vap2=bperp^2/ronorm
@@ -641,7 +630,7 @@ vs=vsa
 ;stop
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Plasma transisitons
-if (species ne 'neutral') or (fl_pip eq 0) then begin
+if (species ne 'neutral') then begin
     vslowpre =abs(vf(ipre)/sqrt(vslow2(ipre)))
     valfpre  =abs(vf(ipre)/sqrt(vap2(ipre)))
     vfastpre =abs(vf(ipre)/sqrt(vfast2(ipre)))
@@ -716,6 +705,19 @@ if (species ne 'neutral') or (fl_pip eq 0) then begin
     endif
 endif
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Neutral transitions
+if (species eq 'neutral') then begin
+
+    sonicm=abs(vf/sqrt(cs2))
+
+    tpos=2
+    if sonicm(ipos) gt 1 then tpos = 1
+
+    tpre=2
+    if sonicm(ipre) gt 1 then tpre = 1
+
+endif
 ;print,'states',tpre,tpos
 ;stop
 
@@ -731,7 +733,7 @@ endif
 ;Compressible transitions
 
 ;Plasma transisitons
-if (species ne 'neutral') or (fl_pip eq 0) then begin
+if (species ne 'neutral') then begin
     if (tpre eq 1) and (tpos eq 2) then begin
         fastx=[fastx,col(i)]
         fasty=[fasty,row(i)]
@@ -780,6 +782,17 @@ if (species ne 'neutral') or (fl_pip eq 0) then begin
         if data_save eq 1 then arrtype(i)=2
         rescode='int'
     endif 
+endif
+
+;Neutral transitions
+if (species eq 'neutral') then begin
+    if (tpre eq 1) and (tpos eq 2) then begin
+        slowx=[slowx,col(i)]
+        slowy=[slowy,row(i)]
+    	if ndim eq 3 then slowz=[slowz,zrow(i)]
+        if data_save eq 1 then arrtype(i)=1
+        rescode='sonic'
+    endif
 endif
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -861,34 +874,6 @@ shocks=create_struct(['x','y','z','slowx','slowy','slowz','fastx','fasty','fastz
 x,y,z,slowx,slowy,slowz,fastx,fasty,fastz,int1x,int1y,int1z,int2x,int2y,int2z,$
 int3x,int3y,int3z,int4x,int4y,int4z)
 
-
-;p=plot3d(slowx,slowy,slowz,'.r',xr=[0,n_elements(x)],yr=[0,n_elements(y)],zr=[0,n_elements(z)])
-
-
-if data_save eq 1 then begin
-save,arrronorm,arrvxnorm,arrvynorm,arrbxnorm,arrbynorm,$
-arrprnorm,arrvpar,arrvperp,arrvslow2,arrvalf2,arrvfast2,$
-arrvs,arrtype,col,row,filename='shockid_v7_data.dat'
-;Order the perminant arrays
-arrronorms=arrronorm(sort(arrtype),*)
-arrvxnorms=arrvxnorm(sort(arrtype),*)
-arrvynorms=arrvynorm(sort(arrtype),*)
-arrbxnorms=arrbxnorm(sort(arrtype),*)
-arrbynorms=arrbynorm(sort(arrtype),*)
-arrprnorms=arrprnorm(sort(arrtype),*)
-arrvpars=arrvpar(sort(arrtype),*)
-arrvperps=arrvperp(sort(arrtype),*)
-arrbpars=arrbpar(sort(arrtype),*)
-arrbperps=arrbperp(sort(arrtype),*)
-arrvslow2s=arrvslow2(sort(arrtype),*)
-arrvfast2s=arrvfast2(sort(arrtype),*)
-arrvalf2s=arrvalf2(sort(arrtype),*)
-arrvss=arrvs(sort(arrtype),*)
-arrtypes=arrtype(sort(arrtype))
-endif
-
-;p=plot(1.0*col/(n_elements(x)-1.0),1.0*row/(n_elements(y)-1.0),/overplot,'.')
-
-close,/all
+;close,/all
 
 END
