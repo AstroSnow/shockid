@@ -27,7 +27,7 @@ RESOLVE_ROUTINE, 'shockframecon', /IS_FUNCTION
 ;rdmpi,ds,datapath=fname,time_step=tread;,var=['ro_p','vx_p','vy_p','vz_p']
 ;Parameters for shock limits
 convl=0.01 ;Convergence threshold
-avecyl=5 ;Cylinder to average over
+avecyl=4 ;Cylinder to average over
 smthfac=1 ;smoothing factor (1=no smoothing)
 shocktol=0.05 ;tolerence for the shock transitions
 bulkspeed=0 ; Use the bulk sound and alfven speeds or individual
@@ -37,6 +37,9 @@ species='neutral' ; plasma or neutral
 ;Data handeling flags
 data_subset=1 ;flag to subset the data
 data_save=0
+
+;Stratified mean density profiles
+strat=1
 
 
 ;This is for the PIP stuff so leave it as zero
@@ -63,7 +66,7 @@ if (ndim eq 3) then z=gridz(margin:egz-margin)
 
 ;MHD variables
 ;if (ds.fl_pip eq 0) and (ds.fl_mhd eq 1) then begin
-    print,'Using MHD quantities'
+;    print,'Using MHD quantities'
     if (ndim eq 3) then begin
         ro=smooth(rog(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
         vx=smooth(vxg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
@@ -77,6 +80,10 @@ if (ndim eq 3) then z=gridz(margin:egz-margin)
         pr=smooth(prg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
     endif
 ;endif
+
+if strat eq 1 then begin
+    mro=mean(mean(ro,dim=1),dim=1)
+endif
 
 ;3D divergence of velocity
 print,'Calculating divergence'
@@ -142,12 +149,12 @@ endif
 ;Filter the candidate cells
 if data_subset eq 1 then begin
 print,'Subsetting data'
-xminf=0.1
-xmaxf=0.9
+xminf=0.1;x(95);0.1
+xmaxf=0.9;x(105);0.9
 yminf=0.1
 ymaxf=0.9
-zminf=z(90);0.45
-zmaxf=z(110);0.55
+zminf=z(95);0.45
+zmaxf=z(105);0.55
 
 col2=[]
 row2=[]
@@ -261,22 +268,29 @@ for i=0,n_elements(col)-1 do begin
 
 
     ;Interpolate the values normal to the shock NOTE: THES ARE NOT PARALLEL TO SHOCK YET!
-    if ndim eq 2 then $
-    ronorm=shocknormvals(ro,tempx,tempy,tempx2,tempy2,2,normx,normy)
+    if ndim eq 2 then begin
+        ronorm=shocknormvals(ro,tempx,tempy,tempx2,tempy2,2,normx,normy)
+    endif
 
     if ndim eq 3 then begin
-    tempxyz=dblarr(6,2*2+1)
-    tempxyz(0,*)=tempx
-    tempxyz(1,*)=tempy
-    tempxyz(2,*)=tempz
-    tempxyz(3,*)=tempx2
-    tempxyz(4,*)=tempy2
-    tempxyz(5,*)=tempz2
-    ronorm=shocknormvals3D(ro,tempxyz,2,normx,normy,normz)
+        tempxyz=dblarr(6,2*2+1)
+        tempxyz(0,*)=tempx
+        tempxyz(1,*)=tempy
+        tempxyz(2,*)=tempz
+        tempxyz(3,*)=tempx2
+        tempxyz(4,*)=tempy2
+        tempxyz(5,*)=tempz2
+        ronorm=shocknormvals3D(ro,tempxyz,2,normx,normy,normz)
+        if strat eq 1 then begin
+            mrotemp=interpol(mro,z,tempz)
+        endif
+
     endif
 ;print,ronorm
 ;stop
     a=max(abs(deriv(ronorm)),b)
+    if strat eq 1 then a=max(abs(deriv(ronorm-mrotemp)),b)
+
     if b eq 2 then begin
         row2=[row2,row(i)]
         col2=[col2,col(i)]
@@ -565,19 +579,36 @@ for i=0,n_elements(col)-1 do begin
     endif
 
     ;define pre and post shock indicies
-    if ronorm(0) LT ronorm(2*avecyl) then begin 
+    if strat eq 0 then begin
+            if ronorm(0) LT ronorm(2*avecyl) then begin 
 ;            ipre=0
 ;            ipos=2*avecyl
             rominpre=min(ronorm(0:avecyl-1),ipre)
             rominpos=max(ronorm(avecyl+1:avecyl*2),ipos)
             ipos=ipos+avecyl+1
-    endif else begin
+            endif else begin
 ;            ipos=0
 ;            ipre=2*avecyl
             rominpos=max(ronorm(0:avecyl-1),ipos)
             rominpre=min(ronorm(avecyl+1:avecyl*2),ipre)
             ipre=ipre+avecyl+1
     endelse
+    endif
+    if strat eq 1 then begin
+        if strat eq 1 then begin
+            mrotemp=interpol(mro,z,tempz)
+        endif
+        rotemp=ronorm-mrotemp
+        if rotemp(0) LT rotemp(2*avecyl) then begin 
+            rominpre=min(rotemp(0:avecyl-1),ipre)
+            rominpos=max(rotemp(avecyl+1:avecyl*2),ipos)
+            ipos=ipos+avecyl+1
+        endif else begin
+            rominpos=max(rotemp(0:avecyl-1),ipos)
+            rominpre=min(rotemp(avecyl+1:avecyl*2),ipre)
+            ipre=ipre+avecyl+1
+        endelse
+    endif
 
     ;calculate conserved quantities
     con_mas=(ronorm(ipos)*vperp(ipos)-ronorm(ipre)*vperp(ipre))/(ronorm(ipre)-ronorm(ipos))
