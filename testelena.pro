@@ -7,7 +7,7 @@ RESOLVE_ROUTINE, 'shockid3d_fun2';, /IS_FUNCTION
 ;fname='../../datadrive/PIPstab3D/PIP3D/'
 ;fname='../../datadrive/simdata/MHD_OZ_3D'
 ;fname='../Convection3D_288x288x168/sim_clean/c3d_0055900_T_32bits.h5'
-fname='../Convection3D_576x576x328/sim_ambi/c3d_0056210_T_32bits.h5'
+fname='../Convection3D_576x576x328/sim_ambi/c3d_0056240_T_32bits.h5'
 ;Time step to read in
 ;t=10
 
@@ -93,12 +93,12 @@ i4x=shocks.int4y(where((shocks.int4x le 110) and (shocks.int4x ge 90)))
 i4y=shocks.int4z(where((shocks.int4x le 110) and (shocks.int4x ge 90)))
 
 ;Use the density as a background
-c=image(reform(ro(100,*,*)),rgb_tab=0)
+c=image(reform(alog10(pr(100,*,*)/ro(100,*,*))),rgb_tab=0)
 p=plot(fx+margin,fy+margin,'b.',/overplot,sym_thick=2) ;The 6 is there because of the ghost cells in my code that the shockid routine assumes. We can change this quite easily.
 p=plot(sx+margin,sy+margin,'r.',/overplot,sym_thick=2)
 p=plot(i4x+margin,i4y+margin,'g.',/overplot,sym_thick=2)
 
-c=contour(reform((betal(100,*,*))),color='r',c_value=1,/overplot) 
+c=contour(reform((betal(100,*,*))),color='y',c_value=1,/overplot) 
 ;Use the divergence of v as a background
 ;c=contour(divv(*,*,100),/fill,n_levels=101,rgb_tab=0)
 ;p=plot(fx+margin,fy,'b.',/overplot,sym_thick=2) ;Margin not needed here
