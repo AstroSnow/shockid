@@ -17,7 +17,7 @@ jz=jz(6:nx-7,6:ny-7)
 ;gridy=ds.y(6:ny-7)
 
 
-jmin=max(abs(jz))/10.0
+jmin=max(abs(jz))/2.0
 
 ;Find all unsorted current
 index=where(abs(jz) gt jmin)

@@ -13,7 +13,7 @@ function shocknormvals3d, A, tempxyz,avecyl,normx,normy,normz
     for ii=0,2*avecyl do begin
         for jj=0,2*avecyl do begin
             for kk=0,2*avecyl do begin
-                tempa(ii,jj,kk)=A(tempx(ii),tempy(jj),tempz(jj))
+                tempa(ii,jj,kk)=A(tempx(ii),tempy(jj),tempz(kk))
             endfor
         endfor
     endfor
@@ -22,16 +22,16 @@ function shocknormvals3d, A, tempxyz,avecyl,normx,normy,normz
     normlinex=normx*(indgen(2*avecyl+1)-avecyl)+avecyl
     normliney=normy*(indgen(2*avecyl+1)-avecyl)+avecyl
     normlinez=normz*(indgen(2*avecyl+1)-avecyl)+avecyl
-;print,normlinex
-;print,normliney
-;print,normlinez
+;print,normlinex,normliney,normlinez
 ;stop
 ;    c=contour(tempa(*,*,0),/fill)
 ;    p=plot(normlinex,normliney,/overplot)
 ;stop
     ;Interpolate the values normal to the shock
     ;anorm=interp2d(tempa,tempx2,tempy2,normlinex,normliney)
+;print,tempa
     anorm=interpolate(tempa,normlinex,normliney,normlinez)	
+;print,anorm
 ;stop
     return,anorm
 END
