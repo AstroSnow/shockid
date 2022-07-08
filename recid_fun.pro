@@ -1,6 +1,6 @@
 pro recid_fun,cur,fname=fname,tread=tread
 
-rdmpi,ds,datapath=fname,time_step=tread,/current
+rdmpi,ds,datapath=fname,time_step=tread,/current,var=['bx','by','bz']
 
 ;E=ds.vx_p*ds.by-ds.vy_p*ds.bx
 
