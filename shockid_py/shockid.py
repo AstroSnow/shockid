@@ -15,10 +15,10 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 	bulkspeed=0 # Use the bulk sound and alfven speeds or individual
 	#species='plasma' # plasma or neutral
 	species='neutral' # plasma or neutral
-	data_subset=1
+	data_subset=0
 	
 	#Stratified mean density profiles
-	strat=1
+	strat=0
 	
 	#Define simulation grid
 	print('Removing ghost cells')
@@ -27,6 +27,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 	#Define the end of the grid	
 	egx=np.size(gridx)-1
 	egy=np.size(gridy)-1
+	egz=0.0
 	if (ndim == 3):
 		egz=np.size(gridz)-1
 
@@ -36,17 +37,20 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 	if (ndim == 3):
 		z=gridz[margin:egz-margin]
 
+	dx=x[1]-x[0]
+	dy=y[1]-y[0]
+	dz=0.0#z[1]-z[0]
 	#Smooth the data (if needed)
 	ds=smoothdata(rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim,species,margin,smthfac)
 
 	#Divergence of velocity field
 	print('Calculating velocity divergence')
-	divv=divergence(ds,ndim=2)
+	divv=divergence(ds,2,margin,egx,egy,egz,dx,dy,dz)
 	
 	#Calculate the density gradients
 	print('Calculating density gradients')
 	gradrox=np.gradient(ds['ro'],axis=1)
-	gradroy=np.gradient(ds['ro'],axis=2)
+	gradroy=np.gradient(ds['ro'],axis=0)
 	gradroz=0.0
 	if (ndim == 3):
 		gradroz=np.gradient(ds['ro'],axis=3)
@@ -55,11 +59,15 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 	#identify candidate cells based on divv
 	print('Identify candidate cells')
 	if (ndim ==2):
-		[col,row] = np.argwhere(divv < -convl)
+		temp=np.argwhere(divv < -convl)
+		row=temp[:,1]
+		col=temp[:,0]
+		#[col,row] = np.argwhere(divv < -convl)
 	if (ndim ==3):
 		[col,row,zrow] = np.argwhere(divv < -convl)
 		
-		
+	return(col,row)	
+
 	#Filter the data 
 	if data_subset == 1:
 		print('Subsetting data')
@@ -95,7 +103,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 			
 	#Remove non-local maximun gradient
 	[col,row,zrow]=removeNonMax()
-	
+	"""
 	#Allocate arrays for the shock locations
 	#SHOULD BE A DICTIONARY
 	fastx=[]
@@ -125,7 +133,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 	int4z=[]
 
 	print('Begin loop for n=',np.size(col))
-	
+"""	
 #####################################################################################################
 #Data smoothing routine
 def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
@@ -166,10 +174,10 @@ def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
 #Calculate the divergence of the velocity field
 def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 	if (ndim == 2):
-		divv=(ds['vx'][margin+1:egx-margin+1,margin:egy-margin]-\
-		ds['vx'][margin-1:egx-margin-1,margin:egy-margin])/(2.0*dx) \
-	    +(ds['vy'][margin:egx-margin,margin+1:egy-margin+1]-\
-		ds['vy'][margin:egx-margin,margin-1:egy-margin-1])/(2.0*dy) 
+		divv=(ds['vy'][margin+1:egy-margin+1,margin:egx-margin]-\
+		ds['vy'][margin-1:egy-margin-1,margin:egx-margin])/(2.0*dy) \
+	    +(ds['vx'][margin:egy-margin,margin+1:egx-margin+1]-\
+		ds['vx'][margin:egy-margin,margin-1:egx-margin-1])/(2.0*dx) 
 #	if (ndim == 3):
 #	    divv=(ds['vx'](margin+1:egx-margin+1,margin:egy-margin,margin:egz-margin)-\
 #		ds['vx'](margin-1:egx-margin-1,margin:egy-margin,margin:egz-margin))/(2.0*dx) \
@@ -179,7 +187,7 @@ def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 #		ds['vz'](margin:egx-margin,margin:egy-margin,margin-1:egz-margin-1))/(2.0*dz)
 	return(divv)
 ################################################################
-def removeNonMax(col,row,zrow):
+def removeNonMax(col,row,zrow,gradx,grady,gradz,gradmag,divv,ndim):
 	import numpy as np
 	#Remove cells that are not a local maximum
 	print('Removing non-local maximum density gradients from candidate cells n=',np.size(col))
@@ -191,8 +199,8 @@ def removeNonMax(col,row,zrow):
 	for i in range(0,np.size(col)):
 		#Step ii: find shock normal based on density gradient
 		if ndim == 2:
-		    normx=gradx(col(i),row(i))/gradmag(col(i),row(i))
-		    normy=grady(col(i),row(i))/gradmag(col(i),row(i))
+		    normx=gradx(col[i],row[i])/gradmag(col[i],row[i])
+		    normy=grady(col[i],row[i])/gradmag(col[i],row[i])
 		
 		if ndim == 3:
 		    normx=gradx(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
@@ -200,14 +208,14 @@ def removeNonMax(col,row,zrow):
 		    normz=gradz(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
 				
 
-		tempx=indgen(2*2+1)-2+col(i)
-		tempy=indgen(2*2+1)-2+row(i)
-		tempx2=indgen(2*2+1)-2
-		tempy2=indgen(2*2+1)-2
+		tempx=np.linspace(col[i]-2,col[i]+2,5)
+		tempy=np.linspace(row[i]-2,row[i]+2,5)
+		tempx2=np.linspace(-2,2,5)
+		tempy2=np.linspace(-2,2,5)
 
-		if ndim == 3:
-			tempz=indgen(2*2+1)-2+zrow(i)
-			tempz2=indgen(2*2+1)-2
+#		if ndim == 3:
+#			tempz=indgen(2*2+1)-2+zrow(i)
+#			tempz2=indgen(2*2+1)-2
 		
 		#use periodic BC to fix negative values
 		for ii in range (0,2*2+1):
@@ -262,3 +270,11 @@ def removeNonMax(col,row,zrow):
 	col=col2
 	if ndim==3:
 		zrow=zrow2
+		
+	return(col,row)
+
+def shocknormvals(var,tempx,tempy,tempx2,tempy2,ndim,normx,normy):
+	#Calculate the values normal to the shock
+	
+	var2=var
+	return(var2)
