@@ -11,7 +11,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 	#Parameters for shock limits
 	convl=0.01 #Convergence threshold
 	avecyl=4 #Cylinder to average over
-	smthfac=1 #smoothing factor (1=no smoothing)
+	smthfac=2 #smoothing factor (1=no smoothing)
 	shocktol=0.05 #tolerence for the shock transitions
 	bulkspeed=0 # Use the bulk sound and alfven speeds or individual
 	#species='plasma' # plasma or neutral
@@ -141,11 +141,15 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 #####################################################################################################
 #Data smoothing routine
 def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
-	print('Smoothing doesnt work')
-	print('Fit it yourself or do without')
+	from scipy.ndimage import gaussian_filter
+	print('Smoothing isnt overly tested and is simulation specific')
 	#Appy some smoothing	
 	#Gaussian smoothing?
 	if (ndim == 2):
+		ro=gaussian_filter(ro,smthfac)
+		vx=gaussian_filter(vx,smthfac)
+		vy=gaussian_filter(vy,smthfac)
+		pr=gaussian_filter(pr,smthfac)	
 #		ro=smooth(rog(margin:egx-margin,margin:egy-margin),smthfac)
 #		vx=smooth(vxg(margin:egx-margin,margin:egy-margin),smthfac)
 #		vy=smooth(vyg(margin:egx-margin,margin:egy-margin),smthfac)
@@ -156,9 +160,9 @@ def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
 #			bx=smooth(bxg(margin:egx-margin,margin:egy-margin),smthfac)
 #			by=smooth(byg(margin:egx-margin,margin:egy-margin),smthfac)
 #			bz=smooth(bzg(margin:egx-margin,margin:egy-margin),smthfac)
-			ds[bx]=bx
-			ds[by]=by
-			ds[bz]=bz
+			ds[bx]=gaussian_filter(bx,smthfac)
+			ds[by]=gaussian_filter(by,smthfac)
+			ds[bz]=gaussian_filter(bz,smthfac)
 	if (ndim == 3):
 #		ro=smooth(rog(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
 #		vx=smooth(vxg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
