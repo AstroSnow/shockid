@@ -4,9 +4,10 @@ PYTHON code for shockID
 To Do:
 1) everything
 """
+import numpy as np
 
 def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
-	import numpy as np
+#	import numpy as np
 	#Parameters for shock limits
 	convl=0.01 #Convergence threshold
 	avecyl=4 #Cylinder to average over
@@ -62,13 +63,14 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 		temp=np.argwhere(divv < -convl)
 		row=temp[:,1]
 		col=temp[:,0]
+		zrow=0
 		#[col,row] = np.argwhere(divv < -convl)
 	if (ndim ==3):
 		[col,row,zrow] = np.argwhere(divv < -convl)
 		
-	return(col,row)	
+	
 
-	#Filter the data 
+	"""#Filter the data 
 	if data_subset == 1:
 		print('Subsetting data')
 		xminf=0.1#x(95);0.1
@@ -100,9 +102,11 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 		row=row2
 		if ndim == 3:
 			zrow=zrow2
-			
+	"""		
 	#Remove non-local maximun gradient
-	[col,row,zrow]=removeNonMax()
+	[col,row]=removeNonMax(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2)
+	
+	return(col,row)	
 	"""
 	#Allocate arrays for the shock locations
 	#SHOULD BE A DICTIONARY
@@ -187,7 +191,7 @@ def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 #		ds['vz'](margin:egx-margin,margin:egy-margin,margin-1:egz-margin-1))/(2.0*dz)
 	return(divv)
 ################################################################
-def removeNonMax(col,row,zrow,gradx,grady,gradz,gradmag,divv,ndim):
+def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
 	import numpy as np
 	#Remove cells that are not a local maximum
 	print('Removing non-local maximum density gradients from candidate cells n=',np.size(col))
@@ -199,14 +203,14 @@ def removeNonMax(col,row,zrow,gradx,grady,gradz,gradmag,divv,ndim):
 	for i in range(0,np.size(col)):
 		#Step ii: find shock normal based on density gradient
 		if ndim == 2:
-		    normx=gradx(col[i],row[i])/gradmag(col[i],row[i])
-		    normy=grady(col[i],row[i])/gradmag(col[i],row[i])
+		    normx=gradx[col[i],row[i]]/gradmag[col[i],row[i]]
+		    normy=grady[col[i],row[i]]/gradmag[col[i],row[i]]
 		
-		if ndim == 3:
+		"""if ndim == 3:
 		    normx=gradx(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
 		    normy=grady(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
 		    normz=gradz(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
-				
+		"""		
 
 		tempx=np.linspace(col[i]-2,col[i]+2,5)
 		tempy=np.linspace(row[i]-2,row[i]+2,5)
@@ -218,11 +222,11 @@ def removeNonMax(col,row,zrow,gradx,grady,gradz,gradmag,divv,ndim):
 #			tempz2=indgen(2*2+1)-2
 		
 		#use periodic BC to fix negative values
-		for ii in range (0,2*2+1):
+		for ii in range(0,5):
 			if ndim == 2:
-				if tempx(ii) < 0:
+				if tempx[ii] < 0:
 					tempx[ii]=np.size(divv[:,0])+tempx[ii]
-				if tempy(ii) < 0:
+				if tempy[ii] < 0:
 					tempy[ii]=np.size(divv[0,:])+tempy[ii]
 #		    if ndim == 3:
 #		        if tempx(ii) lt 0 then tempx(ii)=N_elements(divv(*,0,0))+tempx(ii)
@@ -230,7 +234,7 @@ def removeNonMax(col,row,zrow,gradx,grady,gradz,gradmag,divv,ndim):
 #		        if tempz(ii) lt 0 then tempz(ii)=N_elements(divv(0,0,*))+tempz(ii)
 		    
 		#use periodic BC to fix outside grid values
-		for ii in range(0,2*2+1):
+		for ii in range(0,5):
 			if ndim == 2:
 				if tempx[ii] > np.size(divv[:,0])-1:
 					tempx[ii]=tempx[ii]-np.size(divv[:,0])
@@ -243,7 +247,7 @@ def removeNonMax(col,row,zrow,gradx,grady,gradz,gradmag,divv,ndim):
 		    
 		#Interpolate the values normal to the shock NOTE: THES ARE NOT PARALLEL TO SHOCK YET!
 		if ndim == 2:
-		    ronorm=shocknormvals(ro,tempx,tempy,tempx2,tempy2,2,normx,normy)
+		    ronorm=shocknormvals(ro,tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)
 		
 #		if ndim == 3:
 #		    tempxyz=dblarr(6,2*2+1)
@@ -258,12 +262,13 @@ def removeNonMax(col,row,zrow,gradx,grady,gradz,gradmag,divv,ndim):
 #		        mrotemp=interpol(mro,z,tempz)
 		    
 
-		a=max(abs(deriv(ronorm)),b)
+		#a=max(abs(deriv(ronorm)),b)
+		b=np.argmax(np.abs(np.gradient(ronorm)))
 #		if strat eq 1 then a=max(abs(deriv(ronorm-mrotemp)),b)
-
+		#print(np.gradient(ronorm))
 		if b == 2:
-			row2=[row2,row(i)]
-			col2=[col2,col(i)]
+			row2.append(row[i])#=[row2,row[i]]
+			col2.append(col[i])#=[col2,col[i]]
 #		if ndim eq 3 then zrow2=[zrow2,zrow(i)]
 		
 	row=row2
@@ -273,8 +278,30 @@ def removeNonMax(col,row,zrow,gradx,grady,gradz,gradmag,divv,ndim):
 		
 	return(col,row)
 
-def shocknormvals(var,tempx,tempy,tempx2,tempy2,ndim,normx,normy):
+def shocknormvals(var,tempx,tempy,tempx2,tempy2,ndim,normx,normy,avecyl):
+    #from scipy.interpolate import RegularGridInterpolator
+    import scipy.interpolate as spint
+    RGI = spint.RegularGridInterpolator
 	#Calculate the values normal to the shock
-	
-	var2=var
-	return(var2)
+    tempa=np.zeros([2*avecyl+1,2*avecyl+1])
+    
+    #populate the array (density)
+    for ii in range(0,2*avecyl+1):
+        for jj in range(0,2*avecyl+1):
+            #print(ii,jj,tempx[ii].astype(int),tempy[jj].astype(int))
+            tempa[ii,jj]=var[tempx[ii].astype(int),tempy[jj].astype(int)]
+
+    #find the normal line
+    normlinex=normx*np.linspace(-avecyl,avecyl,avecyl*2+1)#(indgen(2*avecyl+1)-avecyl)
+    normliney=normy*np.linspace(-avecyl,avecyl,avecyl*2+1)#*(indgen(2*avecyl+1)-avecyl)   
+    pnts=[np.linspace(-avecyl,avecyl,avecyl*2+1),np.linspace(-avecyl,avecyl,avecyl*2+1)]
+								
+    #Interpolate the values normal to the shock
+    rgi=RGI(points=pnts,values=tempa)
+    #var2=rgi([normlinex,normliney])
+    var2=np.zeros(2*avecyl+1)
+    for ii in range(0,2*avecyl+1):
+        var2[ii]=rgi([normliney[ii],normlinex[ii]])
+#	var2=interp2d(tempa,tempx2,tempy2,normlinex,normliney)
+    #print(normliney)
+    return(var2)

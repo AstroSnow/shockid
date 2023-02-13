@@ -31,8 +31,8 @@ divv=(v2[margin+1:egy-margin+1,margin:egx-margin]-\
 
 #plt.contourf(divv)
 #plt.contourf(divv[:,950:1150],levels=np.linspace(-0.055,-0.00001,100))
-plt.contourf(divv,nlevels=101,vmax=-0.01)
+plt.contourf(divv,levels=101,vmax=-0.01)
 
 [col,row]=shockid(ds['xgrid'],ds['ygrid'],0.0,ds['ro_p'],ds['vx_p'],ds['vy_p'],0.0,ds['bx'],ds['by'],ds['bz'],ds['pr_p'])
 
-plt.plot(row,col,color='r')
+plt.plot(row,col,color='r',linestyle='',marker='.',markersize=0.8)
