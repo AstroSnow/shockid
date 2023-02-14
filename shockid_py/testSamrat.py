@@ -44,8 +44,8 @@ divv=(v1[margin+1:egy-margin+1,margin:egx-margin]-\
 
 #plt.contourf(divv)
 #plt.contourf(divv[:,950:1150],levels=np.linspace(-0.055,-0.00001,100))
-plt.contourf(np.log10(-divv[:,950:1095].T),levels=101)
+plt.contourf(np.log10(-divv.T),levels=101)
 
-[col,row]=shockid(xg,yg,0.0,rho,v2,v1,0.0,0.0,0.0,0.0,0.0)
+shocks=shockid(xg,yg,0.0,np.asarray(rho).T,np.asarray(v2).T,np.asarray(v1).T,0.0,0.0,0.0,0.0,0.0)
 
-plt.plot(col,row-950,color='r',marker='+',linestyle='',markersize=0.5)
+plt.plot(shocks['slow'][:,1],shocks['slow'][:,0],color='r',marker='+',linestyle='',markersize=0.5)
