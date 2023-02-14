@@ -36,5 +36,5 @@ plt.contourf(divv,levels=101,vmax=-0.01)
 #[col,row]=shockid(ds['xgrid'],ds['ygrid'],0.0,ds['ro_p'],ds['vx_p'],ds['vy_p'],0.0,ds['bx'],ds['by'],ds['bz'],ds['pr_p'])
 #plt.plot(row,col,color='r',linestyle='',marker='.',markersize=2.8)
 
-shocks=shockid(ds['xgrid'],ds['ygrid'],0.0,ds['ro_p'],ds['vx_p'],ds['vy_p'],0.0,ds['bx'],ds['by'],ds['bz'],ds['pr_p'])
+shocks=shockid(ds['xgrid'],ds['ygrid'],0.0,ds['ro_p'],ds['vx_p'],ds['vy_p'],0.0,ds['bx'],ds['by'],ds['bz'],ds['pr_p'],smthfac=2)
 plt.plot(shocks['slow'][:,1],shocks['slow'][:,0],color='r',linestyle='',marker='.',markersize=2.8)

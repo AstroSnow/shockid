@@ -6,12 +6,12 @@ To Do:
 """
 import numpy as np
 
-def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
+def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0):
 #	import numpy as np
 	#Parameters for shock limits
 	convl=0.01 #Convergence threshold
 	avecyl=5 #Cylinder to average over
-	smthfac=3 #smoothing factor (1=no smoothing)
+#	smthfac=0 #smoothing factor (1=no smoothing)
 	shocktol=0.05 #tolerence for the shock transitions
 	bulkspeed=0 # Use the bulk sound and alfven speeds or individual
 	#species='plasma' # plasma or neutral
