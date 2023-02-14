@@ -10,12 +10,12 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 #	import numpy as np
 	#Parameters for shock limits
 	convl=0.01 #Convergence threshold
-	avecyl=4 #Cylinder to average over
-	smthfac=2 #smoothing factor (1=no smoothing)
+	avecyl=5 #Cylinder to average over
+	smthfac=3 #smoothing factor (1=no smoothing)
 	shocktol=0.05 #tolerence for the shock transitions
 	bulkspeed=0 # Use the bulk sound and alfven speeds or individual
 	#species='plasma' # plasma or neutral
-	species='neutral' # plasma or neutral
+	species='plasma' # plasma or neutral
 	data_subset=0
 	
 	#Stratified mean density profiles
@@ -104,40 +104,68 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2):
 			zrow=zrow2
 	"""		
 	#Remove non-local maximun gradient
+	#print('Removing non-local maximum candidates')
 	[col,row]=removeNonMax(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2)
 	
-	return(col,row)	
-	"""
+	#return(col,row)	
+	
 	#Allocate arrays for the shock locations
-	#SHOULD BE A DICTIONARY
-	fastx=[]
-	fasty=[]
-	fastz=[]
-	fastm=[]
-
-	slowx=[]
-	slowy=[]
-	slowz=[]
-	slowm=[]
-
-	int1x=[]
-	int1y=[]
-	int1z=[]
-
-	int2x=[]
-	int2y=[]
-	int2z=[]
-
-	int3x=[]
-	int3y=[]
-	int3z=[]
-
-	int4x=[]
-	int4y=[]
-	int4z=[]
+	shocks={}
+	fast=[0,0]
+	slow=[0,0]
+	int1=[0,0]
+	int2=[0,0]
+	int3=[0,0]
+	int4=[0,0]
 
 	print('Begin loop for n=',np.size(col))
-"""	
+	for i in range(0,np.size(col)):
+		#Calcuate data along the LOS
+		normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
+		#get indecies of pre and post shock states
+		[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
+		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
+		speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bperp'], normarr['ang'])
+		#Put velocity in shock frame
+		vfpos=normarr['vperp'][ipos]+vsa
+		vfpre=normarr['vperp'][ipre]+vsa
+		
+		vslowpre =np.abs(vfpre/np.sqrt(speeds['vslow2'][ipre]))
+		valfpre  =np.abs(vfpre/np.sqrt(speeds['vap2'][ipre]))
+		vfastpre =np.abs(vfpre/np.sqrt(speeds['vfast2'][ipre]))
+		prestate=getState(vslowpre,valfpre,vfastpre)
+		
+		vslowpos =np.abs(vfpos/np.sqrt(speeds['vslow2'][ipos]))
+		valfpos  =np.abs(vfpos/np.sqrt(speeds['vap2'][ipos]))
+		vfastpos =np.abs(vfpos/np.sqrt(speeds['vfast2'][ipos]))
+		posstate=getState(vslowpos,valfpos,vfastpos)
+		
+		#Get the transitions
+		if (prestate == 1) and (posstate==2):
+			#Fast shocks
+			fast=np.vstack((fast,[col[i],row[i]]))
+			#print('fast shock')
+		if (prestate == 3) and (posstate==4):
+			#Fast shocks
+			slow=np.vstack((slow,[col[i],row[i]]))
+		if (prestate == 1) and (posstate==3):
+			int1=np.vstack((int1,[col[i],row[i]]))
+		if (prestate == 1) and (posstate==4):
+			int2=np.vstack((int2,[col[i],row[i]]))
+		if (prestate == 2) and (posstate==3):
+			int3=np.vstack((int3,[col[i],row[i]]))
+		if (prestate == 2) and (posstate==4):
+			int4=np.vstack((int4,[col[i],row[i]]))
+			
+			
+			
+	shocks['slow']=slow
+	shocks['fast']=fast
+	shocks['int1']=int1
+	shocks['int2']=int2
+	shocks['int3']=int3
+	shocks['int4']=int4
+	return(shocks)
 #####################################################################################################
 #Data smoothing routine
 def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
@@ -160,9 +188,9 @@ def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
 #			bx=smooth(bxg(margin:egx-margin,margin:egy-margin),smthfac)
 #			by=smooth(byg(margin:egx-margin,margin:egy-margin),smthfac)
 #			bz=smooth(bzg(margin:egx-margin,margin:egy-margin),smthfac)
-			ds[bx]=gaussian_filter(bx,smthfac)
-			ds[by]=gaussian_filter(by,smthfac)
-			ds[bz]=gaussian_filter(bz,smthfac)
+			ds['bx']=gaussian_filter(bx,smthfac)
+			ds['by']=gaussian_filter(by,smthfac)
+			ds['bz']=gaussian_filter(bz,smthfac)
 	if (ndim == 3):
 #		ro=smooth(rog(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
 #		vx=smooth(vxg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
@@ -195,6 +223,77 @@ def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 #		ds['vz'](margin:egx-margin,margin:egy-margin,margin-1:egz-margin-1))/(2.0*dz)
 	return(divv)
 ################################################################
+def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=False):
+	#Step ii: find shock normal based on density gradient
+	if ndim == 2:
+	    normx=gradx[col,row]/gradmag[col,row]
+	    normy=grady[col,row]/gradmag[col,row]
+	"""if ndim == 3:
+	    normx=gradx(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
+	    normy=grady(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
+	    normz=gradz(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
+	"""		
+
+	tempx=np.linspace(col-avecyl,col+avecyl,2*avecyl+1)
+	tempy=np.linspace(row-avecyl,row+avecyl,2*avecyl+1)
+	tempx2=np.linspace(-avecyl,avecyl,2*avecyl+1)
+	tempy2=np.linspace(-avecyl,avecyl,2*avecyl+1)
+
+#		if ndim == 3:
+#			tempz=indgen(2*2+1)-2+zrow(i)
+#			tempz2=indgen(2*2+1)-2
+	
+	#use periodic BC to fix negative values
+	for ii in range(0,2*avecyl+1):
+		if ndim == 2:
+			if tempx[ii] < 0:
+				tempx[ii]=np.size(divv[:,0])+tempx[ii]
+			if tempy[ii] < 0:
+				tempy[ii]=np.size(divv[0,:])+tempy[ii]
+#		    if ndim == 3:
+#		        if tempx(ii) lt 0 then tempx(ii)=N_elements(divv(*,0,0))+tempx(ii)
+#		        if tempy(ii) lt 0 then tempy(ii)=N_elements(divv(0,*,0))+tempy(ii)
+#		        if tempz(ii) lt 0 then tempz(ii)=N_elements(divv(0,0,*))+tempz(ii)
+	    
+	#use periodic BC to fix outside grid values
+	for ii in range(0,2*avecyl+1):
+		if ndim == 2:
+			if tempx[ii] > np.size(divv[:,0])-1:
+				tempx[ii]=tempx[ii]-np.size(divv[:,0])
+			if tempy[ii] > np.size(divv[0,:])-1:
+				tempy[ii]=tempy[ii]-np.size(divv[0,:])
+				
+	#Interpolate the values normal to the shock NOTE: THES ARE NOT PARALLEL TO SHOCK YET!
+	normvals={}
+	if ndim == 2:
+		if gcalc == True:	
+			ronorm=shocknormvals(var,tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)   
+			return(ronorm)
+		if gcalc == False:
+			ronorm=shocknormvals(var['ro'],tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)            
+			normvals['ro']=ronorm
+			vxnorm=shocknormvals(var['vx'],tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)
+			normvals['vx']=vxnorm
+			vynorm=shocknormvals(var['vy'],tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)
+			normvals['vy']=vynorm
+			prnorm=shocknormvals(var['pr'],tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)
+			normvals['pr']=prnorm
+			bxnorm=shocknormvals(var['bx'],tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)
+			normvals['bx']=bxnorm
+			bynorm=shocknormvals(var['by'],tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)
+			normvals['by']=bynorm
+			normvals['normx']=normx
+			normvals['normy']=normy
+			normvals['perpx']=(-normy/normx)/np.sqrt(normy**2/normx**2+1.0)
+			normvals['perpy']=1.0/np.sqrt(normy**2/normx**2+1.0)
+			normvals['bperp']=normvals['normx']*normvals['bx']+normvals['normy']*normvals['by']    
+			normvals['bpar']=normvals['perpx']*normvals['bx']+normvals['perpy']*normvals['by']
+			normvals['vperp']=normvals['normx']*normvals['vx']+normvals['normy']*normvals['vy']    
+			normvals['vpar']=normvals['perpx']*normvals['vx']+normvals['perpy']*normvals['vy']
+			normvals['ang']=np.arctan(normvals['bpar']/normvals['bperp']) 
+			return(normvals)
+	
+################################################################
 def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
 	import numpy as np
 	#Remove cells that are not a local maximum
@@ -205,68 +304,8 @@ def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
 	zrow2=[]
 
 	for i in range(0,np.size(col)):
-		#Step ii: find shock normal based on density gradient
-		if ndim == 2:
-		    normx=gradx[col[i],row[i]]/gradmag[col[i],row[i]]
-		    normy=grady[col[i],row[i]]/gradmag[col[i],row[i]]
-		
-		"""if ndim == 3:
-		    normx=gradx(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
-		    normy=grady(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
-		    normz=gradz(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
-		"""		
+		ronorm=getNormVals(col[i],row[i],zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=True)
 
-		tempx=np.linspace(col[i]-2,col[i]+2,5)
-		tempy=np.linspace(row[i]-2,row[i]+2,5)
-		tempx2=np.linspace(-2,2,5)
-		tempy2=np.linspace(-2,2,5)
-
-#		if ndim == 3:
-#			tempz=indgen(2*2+1)-2+zrow(i)
-#			tempz2=indgen(2*2+1)-2
-		
-		#use periodic BC to fix negative values
-		for ii in range(0,5):
-			if ndim == 2:
-				if tempx[ii] < 0:
-					tempx[ii]=np.size(divv[:,0])+tempx[ii]
-				if tempy[ii] < 0:
-					tempy[ii]=np.size(divv[0,:])+tempy[ii]
-#		    if ndim == 3:
-#		        if tempx(ii) lt 0 then tempx(ii)=N_elements(divv(*,0,0))+tempx(ii)
-#		        if tempy(ii) lt 0 then tempy(ii)=N_elements(divv(0,*,0))+tempy(ii)
-#		        if tempz(ii) lt 0 then tempz(ii)=N_elements(divv(0,0,*))+tempz(ii)
-		    
-		#use periodic BC to fix outside grid values
-		for ii in range(0,5):
-			if ndim == 2:
-				if tempx[ii] > np.size(divv[:,0])-1:
-					tempx[ii]=tempx[ii]-np.size(divv[:,0])
-				if tempy[ii] > np.size(divv[0,:])-1:
-					tempy[ii]=tempy[ii]-np.size(divv[0,:])
-#			if ndim == 3:
-#		        if tempx(ii) gt n_elements(divv(*,0,0))-1 then tempx(ii)=tempx(ii)-N_elements(divv(*,0,0))
-#		        if tempy(ii) gt n_elements(divv(0,*,0))-1 then tempy(ii)=tempy(ii)-N_elements(divv(0,*,0))
-#		        if tempz(ii) gt n_elements(divv(0,0,*))-1 then tempz(ii)=tempz(ii)-N_elements(divv(0,0,*))
-		    
-		#Interpolate the values normal to the shock NOTE: THES ARE NOT PARALLEL TO SHOCK YET!
-		if ndim == 2:
-		    ronorm=shocknormvals(ro,tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)
-		
-#		if ndim == 3:
-#		    tempxyz=dblarr(6,2*2+1)
-#		    tempxyz(0,*)=tempx
-#		    tempxyz(1,*)=tempy
-#		    tempxyz(2,*)=tempz
-#		    tempxyz(3,*)=tempx2
-#		    tempxyz(4,*)=tempy2
-#		    tempxyz(5,*)=tempz2
-#		    ronorm=shocknormvals3D(ro,tempxyz,2,normx,normy,normz)
-#		    if strat == 1:
-#		        mrotemp=interpol(mro,z,tempz)
-		    
-
-		#a=max(abs(deriv(ronorm)),b)
 		b=np.argmax(np.abs(np.gradient(ronorm)))
 #		if strat eq 1 then a=max(abs(deriv(ronorm-mrotemp)),b)
 		#print(np.gradient(ronorm))
@@ -282,6 +321,7 @@ def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
 		
 	return(col,row)
 
+###############################################################################
 def shocknormvals(var,tempx,tempy,tempx2,tempy2,ndim,normx,normy,avecyl):
     #from scipy.interpolate import RegularGridInterpolator
     import scipy.interpolate as spint
@@ -309,3 +349,43 @@ def shocknormvals(var,tempx,tempy,tempx2,tempy2,ndim,normx,normy,avecyl):
 #	var2=interp2d(tempa,tempx2,tempy2,normlinex,normliney)
     #print(normliney)
     return(var2)
+
+###############################################################################
+def prepostIndex(ro,avecyl):
+	if ro[0] < ro[2*avecyl]: 
+		ipre=np.argmin(ro[0:avecyl-1])
+		ipos=np.argmax(ro[avecyl+1:avecyl*2])
+		ipos=ipos+avecyl+1
+	else:
+		ipos=np.argmax(ro[0:avecyl-1])
+		ipre=np.argmin(ro[avecyl+1:avecyl*2])
+		ipre=ipre+avecyl+1
+		
+	return(ipre,ipos)
+
+###############################################################################
+def getShockFrame(ropos,ropre,vperppos,vperppre):
+	#Just assuming mass conservation. There are better ways to do this.
+	vsa=(ropos*vperppos-ropre*vperppre)/(ropre-ropos)
+	return(vsa)
+
+###############################################################################
+def getWaveSpeeds(ro,pr,bx,by,bperp,ang):
+	cs2=5.0/3.0*pr/ro
+	va2=(bx**2+by**2)/ro
+	vap2=bperp**2/ro
+	vslow2=0.5*(cs2+va2-np.sqrt((cs2+va2)**2 - 4.0*va2*cs2*(np.cos(ang))**2))
+	vfast2=0.5*(cs2+va2+np.sqrt((cs2+va2)**2 - 4.0*va2*cs2*(np.cos(ang))**2))
+	speeds={'cs2':cs2,'va2':va2,'vap2':vap2,'vslow2':vslow2,'vfast2':vfast2}
+	return(speeds)
+	
+###############################################################################
+def getState(vslow,valp,vfast):
+	state=4
+	if vfast >= 1:
+		state=1
+	if valp >=1 and vfast < 1:
+		state=2
+	if vslow >=1 and valp < 1:
+		state=3
+	return(state)
