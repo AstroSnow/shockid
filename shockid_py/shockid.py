@@ -10,7 +10,7 @@ import time
 def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,nproc=1):
 #	import numpy as np
 	#Parameters for shock limits
-	convl=0.001 #Convergence threshold
+	convl=0.0001 #Convergence threshold
 	avecyl=5 #Cylinder to average over
 #	smthfac=0 #smoothing factor (1=no smoothing)
 	shocktol=0.05 #tolerence for the shock transitions
@@ -119,62 +119,95 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	#print(np.size(col))
 	#stop
 	#Allocate arrays for the shock locations
-	shocks={}
-	fast=[0,0]
-	slow=[0,0]
-	int1=[0,0]
-	int2=[0,0]
-	int3=[0,0]
-	int4=[0,0]
-
 	print('Begin loop for n=',np.size(col))
-	for i in range(0,np.size(col)):
-		#Calcuate data along the LOS
-		normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
-		#get indecies of pre and post shock states
-		[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
-		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
-		speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bperp'], normarr['ang'])
-		#Put velocity in shock frame
-		vfpos=normarr['vperp'][ipos]+vsa
-		vfpre=normarr['vperp'][ipre]+vsa
-		
-		vslowpre =np.abs(vfpre/np.sqrt(speeds['vslow2'][ipre]))
-		valfpre  =np.abs(vfpre/np.sqrt(speeds['vap2'][ipre]))
-		vfastpre =np.abs(vfpre/np.sqrt(speeds['vfast2'][ipre]))
-		prestate=getState(vslowpre,valfpre,vfastpre)
-		
-		vslowpos =np.abs(vfpos/np.sqrt(speeds['vslow2'][ipos]))
-		valfpos  =np.abs(vfpos/np.sqrt(speeds['vap2'][ipos]))
-		vfastpos =np.abs(vfpos/np.sqrt(speeds['vfast2'][ipos]))
-		posstate=getState(vslowpos,valfpos,vfastpos)
+	time1=time.perf_counter()
+	if nproc == 1:
+		#Series loop. Can be removed at some point
+		shocks={}
+		fast=[0,0]
+		slow=[0,0]
+		int1=[0,0]
+		int2=[0,0]
+		int3=[0,0]
+		int4=[0,0]
 	
-		#print(col[i],row[i])
-		#Get the transitions
-		if (prestate == 1) and (posstate==2):
-			#Fast shocks
-			fast=np.vstack((fast,[col[i],row[i]]))
-			#print('fast shock')
-		if (prestate == 3) and (posstate==4):
-			#Fast shocks
-			slow=np.vstack((slow,[col[i],row[i]]))
-		if (prestate == 1) and (posstate==3):
-			int1=np.vstack((int1,[col[i],row[i]]))
-		if (prestate == 1) and (posstate==4):
-			int2=np.vstack((int2,[col[i],row[i]]))
-		if (prestate == 2) and (posstate==3):
-			int3=np.vstack((int3,[col[i],row[i]]))
-		if (prestate == 2) and (posstate==4):
-			int4=np.vstack((int4,[col[i],row[i]]))
+		for i in range(0,np.size(col)):
+			#Calcuate data along the LOS
+			normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
+			#get indecies of pre and post shock states
+			[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
+			vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
+			speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bperp'], normarr['ang'])
+			#Put velocity in shock frame
+			vfpos=normarr['vperp'][ipos]+vsa
+			vfpre=normarr['vperp'][ipre]+vsa
 			
+			vslowpre =np.abs(vfpre/np.sqrt(speeds['vslow2'][ipre]))
+			valfpre  =np.abs(vfpre/np.sqrt(speeds['vap2'][ipre]))
+			vfastpre =np.abs(vfpre/np.sqrt(speeds['vfast2'][ipre]))
+			prestate=getState(vslowpre,valfpre,vfastpre)
 			
-			
-	shocks['slow']=slow
-	shocks['fast']=fast
-	shocks['int1']=int1
-	shocks['int2']=int2
-	shocks['int3']=int3
-	shocks['int4']=int4
+			vslowpos =np.abs(vfpos/np.sqrt(speeds['vslow2'][ipos]))
+			valfpos  =np.abs(vfpos/np.sqrt(speeds['vap2'][ipos]))
+			vfastpos =np.abs(vfpos/np.sqrt(speeds['vfast2'][ipos]))
+			posstate=getState(vslowpos,valfpos,vfastpos)
+		
+			#print(col[i],row[i])
+			#Get the transitions
+			if (prestate == 1) and (posstate==2):
+				#Fast shocks
+				fast=np.vstack((fast,[col[i],row[i]]))
+				#print('fast shock')
+			if (prestate == 3) and (posstate==4):
+				#Fast shocks
+				slow=np.vstack((slow,[col[i],row[i]]))
+			if (prestate == 1) and (posstate==3):
+				int1=np.vstack((int1,[col[i],row[i]]))
+			if (prestate == 1) and (posstate==4):
+				int2=np.vstack((int2,[col[i],row[i]]))
+			if (prestate == 2) and (posstate==3):
+				int3=np.vstack((int3,[col[i],row[i]]))
+			if (prestate == 2) and (posstate==4):
+				int4=np.vstack((int4,[col[i],row[i]]))
+							
+		shocks['slow']=slow
+		shocks['fast']=fast
+		shocks['int1']=int1
+		shocks['int2']=int2
+		shocks['int3']=int3
+		shocks['int4']=int4
+		
+	if nproc > 1:
+		#Parallel loop
+		import multiprocessing as mp
+		pool=mp.get_context('fork').Pool(nproc)
+		print('using ',nproc,' cores')
+		pitrange=np.zeros((nproc,2))
+		st=int(0)
+		for i in range(0,nproc-1):
+			pitrange[i,0]=int(st)
+			pitrange[i,1]=int(st+np.floor(np.size(col)/nproc))
+			st=pitrange[i,1]+1
+		pitrange[nproc-1,0]=int(st)
+		pitrange[nproc-1,1]=int(np.size(col)-1)
+		print(pitrange[:,0],pitrange[:,1])
+		print('Each processor doing ',int(pitrange[1,0]-pitrange[0,0]),' elements')
+		#sol=shockClassLoop(pitrange[0,0],pitrange[0,1],col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl)
+		sol=pool.starmap(shockClassLoop,[(pitrange[j,0],pitrange[j,1],col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl) for j in range(0,nproc)])
+		pool.close()
+		pool.join()
+		#NEED TO REJOIN EVERYTHING
+		shocks={}
+		shocks['slow']=[sol[j]['slow'] for j in range(0,nproc)]
+		shocks['fast']=[sol[j]['fast'] for j in range(0,nproc)]
+		shocks['int1']=[sol[j]['int1'] for j in range(0,nproc)]
+		shocks['int2']=[sol[j]['int2'] for j in range(0,nproc)]
+		shocks['int3']=[sol[j]['int3'] for j in range(0,nproc)]
+		shocks['int4']=[sol[j]['int4'] for j in range(0,nproc)]
+		
+	time2=time.perf_counter()
+	
+	print('Finding shocks took ',time2-time1,' on ',nproc,' cores')
 	return(shocks)
 ###############################################################################
 def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl):
@@ -187,6 +220,7 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 	int3=[0,0]
 	int4=[0,0]
 	for i in range(int(istart),int(iend)+1):
+		#print(i)
 		#Calcuate data along the LOS
 		normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
 		#get indecies of pre and post shock states
@@ -417,10 +451,11 @@ def removeNonMaxPar(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,n
 
 	sol=pool.starmap(removeNonMaxParLoop,[(pitrange[j,0],pitrange[j,1],col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl) for j in range(0,nproc)])
 	pool.close()
+	pool.join()
 
 	sol=np.asarray(sol)
 	sol=np.sum(sol,axis=0)
-	print(np.size(sol))
+	#print(np.size(sol))
 	row=row[np.argwhere(sol == 1)]
 	col=col[np.argwhere(sol == 1)]
 	#row=row2
