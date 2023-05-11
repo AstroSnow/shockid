@@ -198,12 +198,19 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		pool.join()
 		#NEED TO REJOIN EVERYTHING
 		shocks={}
-		shocks['slow']=[sol[j]['slow'] for j in range(0,nproc)]
-		shocks['fast']=[sol[j]['fast'] for j in range(0,nproc)]
-		shocks['int1']=[sol[j]['int1'] for j in range(0,nproc)]
-		shocks['int2']=[sol[j]['int2'] for j in range(0,nproc)]
-		shocks['int3']=[sol[j]['int3'] for j in range(0,nproc)]
-		shocks['int4']=[sol[j]['int4'] for j in range(0,nproc)]
+		shocks['slow']=np.vstack([sol[j]['slow'] for j in range(0,nproc)])
+		shocks['fast']=np.vstack([sol[j]['fast'] for j in range(0,nproc)])
+		shocks['int1']=np.vstack([sol[j]['int1'] for j in range(0,nproc)])
+		shocks['int2']=np.vstack([sol[j]['int2'] for j in range(0,nproc)])
+		shocks['int3']=np.vstack([sol[j]['int3'] for j in range(0,nproc)])
+		shocks['int4']=np.vstack([sol[j]['int4'] for j in range(0,nproc)])
+
+		shocks['slowmach']=np.vstack([sol[j]['slowmach'] for j in range(0,nproc)])
+		shocks['fastmach']=np.vstack([sol[j]['fastmach'] for j in range(0,nproc)])
+		shocks['int1mach']=np.vstack([sol[j]['int1mach'] for j in range(0,nproc)])
+		shocks['int2mach']=np.vstack([sol[j]['int2mach'] for j in range(0,nproc)])
+		shocks['int3mach']=np.vstack([sol[j]['int3mach'] for j in range(0,nproc)])
+		shocks['int4mach']=np.vstack([sol[j]['int4mach'] for j in range(0,nproc)])
 		
 	time2=time.perf_counter()
 	
@@ -219,6 +226,14 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 	int2=[0,0]
 	int3=[0,0]
 	int4=[0,0]
+	
+	#arrays for storing mach numbers
+	slowmach=[0,0]
+	fastmach=[0,0]
+	int1mach=[0,0]
+	int2mach=[0,0]
+	int3mach=[0,0]
+	int4mach=[0,0]
 	for i in range(int(istart),int(iend)+1):
 		#print(i)
 		#Calcuate data along the LOS
@@ -246,18 +261,24 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 		if (prestate == 1) and (posstate==2):
 			#Fast shocks
 			fast=np.vstack((fast,[col[i],row[i]]))
+			fastmach=np.vstack((fastmach,[valfpre,valfpos]))
 			#print('fast shock')
 		if (prestate == 3) and (posstate==4):
 			#Fast shocks
 			slow=np.vstack((slow,[col[i],row[i]]))
+			slowmach=np.vstack((slowmach,[valfpre,valfpos]))
 		if (prestate == 1) and (posstate==3):
 			int1=np.vstack((int1,[col[i],row[i]]))
+			int1mach=np.vstack((int1mach,[valfpre,valfpos]))
 		if (prestate == 1) and (posstate==4):
 			int2=np.vstack((int2,[col[i],row[i]]))
+			int2mach=np.vstack((int2mach,[valfpre,valfpos]))
 		if (prestate == 2) and (posstate==3):
 			int3=np.vstack((int3,[col[i],row[i]]))
+			int3mach=np.vstack((int3mach,[valfpre,valfpos]))
 		if (prestate == 2) and (posstate==4):
 			int4=np.vstack((int4,[col[i],row[i]]))
+			int4mach=np.vstack((int4mach,[valfpre,valfpos]))
 			
 	shocks['slow']=slow
 	shocks['fast']=fast
@@ -265,6 +286,13 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 	shocks['int2']=int2
 	shocks['int3']=int3
 	shocks['int4']=int4
+	
+	shocks['slowmach']=slowmach
+	shocks['fastmach']=fastmach
+	shocks['int1mach']=int1mach
+	shocks['int2mach']=int2mach
+	shocks['int3mach']=int3mach
+	shocks['int4mach']=int4mach
 	return(shocks)
 
 #####################################################################################################
