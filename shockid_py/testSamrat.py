@@ -9,10 +9,11 @@ from pipreadmods import pipread
 import matplotlib.pyplot as plt
 import numpy as np
 from shockid import shockid
+import h5py
 
-
-#fname='/home/bs428/Downloads/thermal_tearing2d/adiabatic'
-fname='non_adiabatic/t47/'
+#fname='/home/bs428/Downloads/thermal_tearing2d/adiabatic/t47/'
+fname='/media/ben/datadrive1/Samrat_Data/non_adiabatic/t47/'
+#fname='non_adiabatic/t47/'
 
 with open(''.join((fname,'v1_t47.dat'))) as file:
     next(file)
@@ -67,11 +68,24 @@ fig, ax = plt.subplots(figsize=(9, 6))
 ax.contourf(np.log10(rho).T,levels=101,cmap='Greys')
 plt.ylim([950, 1100])
 
-shocks=shockid(xg,yg,0.0,rho.T,v1.T,v2.T,0.0,b1.T,b2.T,0.0,pr.T,smthfac=0,nproc=6)
+nproc=4
+shocks=shockid(xg,yg,0.0,rho.T,v1.T,v2.T,0.0,b1.T,b2.T,0.0,pr.T,smthfac=0,nproc=nproc)
 
+#if nproc == 1:
 plt.plot(shocks['slow'][:,1],shocks['slow'][:,0],color='r',marker='+',linestyle='',markersize=2.5)
 plt.plot(shocks['fast'][:,1],shocks['fast'][:,0],color='b',marker='+',linestyle='',markersize=2.5)
 plt.plot(shocks['int4'][:,1],shocks['int4'][:,0],color='g',marker='+',linestyle='',markersize=2.5)
-
+"""if nproc > 1:
+	for j in range (0,nproc):
+		plt.plot(shocks['slow'][j][:,1],shocks['slow'][j][:,0],color='r',marker='+',linestyle='',markersize=2.5)
+		plt.plot(shocks['fast'][j][:,1],shocks['fast'][j][:,0],color='b',marker='+',linestyle='',markersize=2.5)
+		#plt.plot(shocks['int4'][j][:,1],shocks['int4'][j][:,0],color='g',marker='+',linestyle='',markersize=2.5)
+"""
 savename='samrat_test_47.png'
 plt.savefig(savename)
+
+#Create a h5 file of the shock data
+hf = h5py.File(''.join((fname,'shocks.h5')), 'w')
+for f in shocks:
+	hf.create_dataset(f, data=shocks[f])
+hf.close()
