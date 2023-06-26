@@ -7,11 +7,11 @@ To Do:
 import numpy as np
 import time
 
-def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,nproc=1):
+def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,nproc=1,convl=0.0001,avecyl=2):
 #	import numpy as np
 	#Parameters for shock limits
-	convl=0.0001 #Convergence threshold
-	avecyl=5 #Cylinder to average over
+#	convl=0.0001 #Convergence threshold
+#	avecyl=2 #Cylinder to average over
 #	smthfac=0 #smoothing factor (1=no smoothing)
 	shocktol=0.05 #tolerence for the shock transitions
 	bulkspeed=0 # Use the bulk sound and alfven speeds or individual
@@ -136,8 +136,10 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 			normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
 			#get indecies of pre and post shock states
 			[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
-			vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
-			speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bperp'], normarr['ang'])
+			#vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
+			vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
+						normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
+			speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'], normarr['ang'])
 			#Put velocity in shock frame
 			vfpos=normarr['vperp'][ipos]+vsa
 			vfpre=normarr['vperp'][ipre]+vsa
@@ -240,8 +242,10 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 		normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
 		#get indecies of pre and post shock states
 		[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
-		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
-		speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bperp'], normarr['ang'])
+#		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
+		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
+					normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
+		speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'], normarr['ang'])
 		#Put velocity in shock frame
 		vfpos=normarr['vperp'][ipos]+vsa
 		vfpre=normarr['vperp'][ipre]+vsa
@@ -411,6 +415,10 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 			normvals['bx']=bxnorm
 			bynorm=shocknormvals(var['by'],tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)
 			normvals['by']=bynorm
+			bznorm=var['bz']
+			if np.size(var['bz']) >1:
+				bznorm=shocknormvals(var['bz'],tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)
+			normvals['bz']=bznorm
 			normvals['normx']=normx
 			normvals['normy']=normy
 			normvals['perpx']=(-normy/normx)/np.sqrt(normy**2/normx**2+1.0)
@@ -554,15 +562,19 @@ def prepostIndex(ro,avecyl):
 	return(ipre,ipos)
 
 ###############################################################################
-def getShockFrame(ropos,ropre,vperppos,vperppre):
+def getShockFrame(ropos,ropre,vperppos,vperppre,vparpos,vparpre,bparpos,bparpre,bperppos,bperppre):
 	#Just assuming mass conservation. There are better ways to do this.
 	vsa=(ropos*vperppos-ropre*vperppre)/(ropre-ropos)
+	#Electric field
+#	vsa=(vperppos*bparpos-vperppre*bparpre-vparpos*bperppos+vparpre*bperppre)/(bparpos-bparpre)
 	return(vsa)
 
 ###############################################################################
-def getWaveSpeeds(ro,pr,bx,by,bperp,ang):
+def getWaveSpeeds(ro,pr,bx,by,bz,bperp,ang):
 	cs2=5.0/3.0*pr/ro
 	va2=(bx**2+by**2)/ro
+	if np.size(bz) > 1:
+		va2=(bx**2+by**2+bz**2)/ro
 	vap2=bperp**2/ro
 	vslow2=0.5*(cs2+va2-np.sqrt((cs2+va2)**2 - 4.0*va2*cs2*(np.cos(ang))**2))
 	vfast2=0.5*(cs2+va2+np.sqrt((cs2+va2)**2 - 4.0*va2*cs2*(np.cos(ang))**2))
