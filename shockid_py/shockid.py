@@ -591,3 +591,150 @@ def getState(vslow,valp,vfast):
 	if vslow >=1 and valp < 1:
 		state=3
 	return(state)
+
+###############################################################################
+def restoreShocks(fname):
+	import h5py
+	hf=h5py.File(fname, "r")
+	shocks={}
+	for f in hf.keys():
+		temp=np.asarray(hf[f])
+		shocks[f]=temp
+	return(shocks)
+
+###############################################################################
+def shockFilter(shocks,maxDis):
+	#Filter the shocks to remove anything that isnt near a related shock
+	#Naive approach for getting rid of some of the spurious points
+	
+	#Define a return dictionarry
+	shocks2={}
+	
+	#Slow shocks
+	if np.size(shocks['slow'][:,1]) > 2:
+		isol=[]
+		tempx=shocks['slow'][:,1]
+		tempy=shocks['slow'][:,0]
+		for i in range(0,np.size(shocks['slow'][:,1])):
+			ix=shocks['slow'][i,1]
+			iy=shocks['slow'][i,0]
+			tempd=np.square(tempx-ix)+np.square(tempy-iy)
+			tempd=np.sqrt(tempd[np.nonzero(tempd)])
+			if np.size(tempd) >1:
+				if np.min(tempd) >=maxDis:
+					#print(i)
+					isol.append(i)
+		slowx=np.delete(shocks['slow'][:,1],isol)
+		slowy=np.delete(shocks['slow'][:,0],isol)
+		slow=np.zeros(shape=(np.size(slowx),2))
+		slow[:,1]=slowx
+		slow[:,0]=slowy
+		shocks2['slow']=slow
+	
+	#fast shocks
+	if np.size(shocks['fast'][:,1]) > 2:
+		isol=[]
+		tempx=shocks['fast'][:,1]
+		tempy=shocks['fast'][:,0]
+		for i in range(0,np.size(shocks['fast'][:,1])):
+			ix=shocks['fast'][i,1]
+			iy=shocks['fast'][i,0]
+			tempd=np.square(tempx-ix)+np.square(tempy-iy)
+			tempd=np.sqrt(tempd[np.nonzero(tempd)])
+			if np.size(tempd) >1:
+				if np.min(tempd) >=maxDis:
+					#print(i)
+					isol.append(i)
+		fastx=np.delete(shocks['fast'][:,1],isol)
+		fasty=np.delete(shocks['fast'][:,0],isol)
+		fast=np.zeros(shape=(np.size(fastx),2))
+		fast[:,1]=fastx
+		fast[:,0]=fasty
+		shocks2['fast']=fast
+	
+	#int1 shocks
+	if np.size(shocks['int1'][:,1]) > 2:
+		isol=[]
+		tempx=shocks['int1'][:,1]
+		tempy=shocks['int1'][:,0]
+		for i in range(0,np.size(shocks['int1'][:,1])):
+			ix=shocks['int1'][i,1]
+			iy=shocks['int1'][i,0]
+			tempd=np.square(tempx-ix)+np.square(tempy-iy)
+			tempd=np.sqrt(tempd[np.nonzero(tempd)])
+			if np.size(tempd) >1:
+				if np.min(tempd) >=maxDis:
+					#print(i)
+					isol.append(i)
+		int1x=np.delete(shocks['int1'][:,1],isol)
+		int1y=np.delete(shocks['int1'][:,0],isol)
+		int1=np.zeros(shape=(np.size(int1x),2))
+		int1[:,1]=int1x
+		int1[:,0]=int1y
+		shocks2['int1']=int1
+	
+	#int1 shocks
+	if np.size(shocks['int2'][:,1]) > 2:
+		isol=[]
+		tempx=shocks['int2'][:,1]
+		tempy=shocks['int2'][:,0]
+		for i in range(0,np.size(shocks['int2'][:,1])):
+			ix=shocks['int2'][i,1]
+			iy=shocks['int2'][i,0]
+			tempd=np.square(tempx-ix)+np.square(tempy-iy)
+			tempd=np.sqrt(tempd[np.nonzero(tempd)])
+			if np.size(tempd) >1:
+				if np.min(tempd) >=maxDis:
+					#print(i)
+					isol.append(i)
+		int2x=np.delete(shocks['int2'][:,1],isol)
+		int2y=np.delete(shocks['int2'][:,0],isol)
+		int2=np.zeros(shape=(np.size(int2x),2))
+		int2[:,1]=int2x
+		int2[:,0]=int2y
+		shocks2['int2']=int2
+	
+	#int1 shocks
+	if np.size(shocks['int3'][:,1]) > 2:
+		isol=[]
+		tempx=shocks['int3'][:,1]
+		tempy=shocks['int3'][:,0]
+		for i in range(0,np.size(shocks['int3'][:,1])):
+			ix=shocks['int3'][i,1]
+			iy=shocks['int3'][i,0]
+			tempd=np.square(tempx-ix)+np.square(tempy-iy)
+			tempd=np.sqrt(tempd[np.nonzero(tempd)])
+			if np.size(tempd) >1:
+				if np.min(tempd) >=maxDis:
+					#print(i)
+					isol.append(i)
+		int3x=np.delete(shocks['int3'][:,1],isol)
+		int3y=np.delete(shocks['int3'][:,0],isol)
+		int3=np.zeros(shape=(np.size(int3x),2))
+		int3[:,1]=int3x
+		int3[:,0]=int3y
+		shocks2['int3']=int3
+	
+	#int1 shocks
+	if np.size(shocks['int4'][:,1]) > 2:
+		isol=[]
+		tempx=shocks['int4'][:,1]
+		tempy=shocks['int4'][:,0]
+		for i in range(0,np.size(shocks['int4'][:,1])):
+			ix=shocks['int4'][i,1]
+			iy=shocks['int4'][i,0]
+			tempd=np.square(tempx-ix)+np.square(tempy-iy)
+			tempd=np.sqrt(tempd[np.nonzero(tempd)])
+			if np.size(tempd) >1:
+				if np.min(tempd) >=maxDis:
+					#print(i)
+					isol.append(i)
+		int4x=np.delete(shocks['int4'][:,1],isol)
+		int4y=np.delete(shocks['int4'][:,0],isol)
+		int4=np.zeros(shape=(np.size(int4x),2))
+		int4[:,1]=int4x
+		int4[:,0]=int4y
+		shocks2['int4']=int4
+	
+	return(shocks2)
+	
