@@ -41,7 +41,9 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 
 	dx=x[1]-x[0]
 	dy=y[1]-y[0]
-	dz=0.0#z[1]-z[0]
+	dz=0.0
+	if (ndim == 3):
+		z[1]-z[0]
 	#Smooth the data (if needed)
 	ds=smoothdata(rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim,species,margin,smthfac)
 
@@ -311,33 +313,21 @@ def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
 		vx=gaussian_filter(vx,smthfac)
 		vy=gaussian_filter(vy,smthfac)
 		pr=gaussian_filter(pr,smthfac)	
-#		ro=smooth(rog(margin:egx-margin,margin:egy-margin),smthfac)
-#		vx=smooth(vxg(margin:egx-margin,margin:egy-margin),smthfac)
-#		vy=smooth(vyg(margin:egx-margin,margin:egy-margin),smthfac)
-#		vz=smooth(vzg(margin:egx-margin,margin:egy-margin),smthfac)
-#		pr=smooth(prg(margin:egx-margin,margin:egy-margin),smthfac)
 		ds={'ro':ro,'vx':vx,'vy':vy,'vz':vz,'pr':pr}
 		if species == 'plasma':
-#			bx=smooth(bxg(margin:egx-margin,margin:egy-margin),smthfac)
-#			by=smooth(byg(margin:egx-margin,margin:egy-margin),smthfac)
-#			bz=smooth(bzg(margin:egx-margin,margin:egy-margin),smthfac)
 			ds['bx']=gaussian_filter(bx,smthfac)
 			ds['by']=gaussian_filter(by,smthfac)
 			ds['bz']=gaussian_filter(bz,smthfac)
 	if (ndim == 3):
-#		ro=smooth(rog(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#		vx=smooth(vxg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#		vy=smooth(vyg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#		vz=smooth(vzg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#		pr=smooth(prg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-		ds={'ro':ro,'vx':vx,'vy':vy,'vz':vz,'pr':pr}
+		ro=gaussian_filter(ro,smthfac)
+		vx=gaussian_filter(vx,smthfac)
+		vy=gaussian_filter(vy,smthfac)
+		vz=gaussian_filter(vz,smthfac)
+		pr=gaussian_filter(pr,smthfac)
 		if species == 'plasma':
-#			bx=smooth(bxg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#			by=smooth(byg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#			bz=smooth(bzg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-			ds[bx]=bx
-			ds[by]=by
-			ds[bz]=bz
+			ds['bx']=gaussian_filter(bx,smthfac)
+			ds['by']=gaussian_filter(by,smthfac)
+			ds['bz']=gaussian_filter(bz,smthfac)
 	return(ds)
 ################################################################
 #Calculate the divergence of the velocity field
