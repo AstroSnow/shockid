@@ -75,8 +75,6 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		row=temp[:,2]
 		col=temp[:,1]
 		zrow=temp[:,0]
-		print(zrow)
-		stop
 		#[col,row,zrow] = np.argwhere(divv < -convl)
 		
 	
@@ -354,7 +352,7 @@ def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 	    +(ds['vx'][margin:egz-margin,margin:egy-margin,margin+1:egx-margin+1]-\
 		ds['vx'][margin:egz-margin,margin:egy-margin,margin-1:egx-margin-1])/(2.0*dx) \
 	    +(ds['vz'][margin+1:egz-margin+1,margin:egy-margin,margin:egx-margin]-\
-		ds['vz'][margin+1:egz-margin+1,margin:egy-margin,margin:egx-margin])/(2.0*dz)
+		ds['vz'][margin-1:egz-margin-1,margin:egy-margin,margin:egx-margin])/(2.0*dz)
 	return(divv)
 ################################################################
 def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=False):
