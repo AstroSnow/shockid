@@ -57,7 +57,9 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	gradroy=np.gradient(ds['ro'],axis=0)
 	gradroz=0.0
 	if (ndim == 3):
-		gradroz=np.gradient(ds['ro'],axis=3)
+		gradrox=np.gradient(ds['ro'],axis=2)
+		gradroy=np.gradient(ds['ro'],axis=1)
+		gradroz=np.gradient(ds['ro'],axis=0)
 	gradmag=np.sqrt(gradrox**2+gradroy**2+gradroz**2)
 
 	#identify candidate cells based on divv
