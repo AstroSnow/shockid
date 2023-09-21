@@ -371,10 +371,10 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 	tempx2=np.linspace(-avecyl,avecyl,2*avecyl+1)
 	tempy2=np.linspace(-avecyl,avecyl,2*avecyl+1)
 
-#		if ndim == 3:
-#			tempz=indgen(2*2+1)-2+zrow(i)
-#			tempz2=indgen(2*2+1)-2
-	
+	if ndim == 3:
+		tempz=np.linspace(zrow-avecyl,zrow+avecyl,2*avecyl+1)
+		tempz2=np.linspace(-avecyl,avecyl,2*avecyl+1)
+		
 	#use periodic BC to fix negative values
 	for ii in range(0,2*avecyl+1):
 		if ndim == 2:
@@ -382,10 +382,13 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 				tempx[ii]=np.size(divv[:,0])+tempx[ii]
 			if tempy[ii] < 0:
 				tempy[ii]=np.size(divv[0,:])+tempy[ii]
-#		    if ndim == 3:
-#		        if tempx(ii) lt 0 then tempx(ii)=N_elements(divv(*,0,0))+tempx(ii)
-#		        if tempy(ii) lt 0 then tempy(ii)=N_elements(divv(0,*,0))+tempy(ii)
-#		        if tempz(ii) lt 0 then tempz(ii)=N_elements(divv(0,0,*))+tempz(ii)
+		if ndim == 3:
+			if tempz[ii] < 0:
+				tempz[ii]=np.size(divv[:,0,0])+tempz[ii]
+			if tempy[ii] < 0:
+				tempy[ii]=np.size(divv[0,:,0])+tempy[ii]
+			if tempx[ii] < 0:
+				tempx[ii]=np.size(divv[0,0,:])+tempx[ii]
 	    
 	#use periodic BC to fix outside grid values
 	for ii in range(0,2*avecyl+1):
@@ -394,6 +397,13 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 				tempx[ii]=tempx[ii]-np.size(divv[:,0])
 			if tempy[ii] > np.size(divv[0,:])-1:
 				tempy[ii]=tempy[ii]-np.size(divv[0,:])
+		if ndim == 3:
+			if tempx[ii] > np.size(divv[0,0,:])-1:
+				tempx[ii]=tempx[ii]-np.size(divv[0,0,:])
+			if tempy[ii] > np.size(divv[0,:,0])-1:
+				tempy[ii]=tempy[ii]-np.size(divv[0,:,0])
+			if tempz[ii] > np.size(divv[0,0,:])-1:
+				tempz[ii]=tempz[ii]-np.size(divv[0,0,:])
 				
 	#Interpolate the values normal to the shock NOTE: THES ARE NOT PARALLEL TO SHOCK YET!
 	normvals={}
