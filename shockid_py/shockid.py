@@ -49,7 +49,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 
 	#Divergence of velocity field
 	print('Calculating velocity divergence')
-	divv=divergence(ds,2,margin,egx,egy,egz,dx,dy,dz)
+	divv=divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz)
 	
 	#Calculate the density gradients
 	print('Calculating density gradients')
@@ -337,13 +337,13 @@ def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 		ds['vy'][margin-1:egy-margin-1,margin:egx-margin])/(2.0*dy) \
 	    +(ds['vx'][margin:egy-margin,margin+1:egx-margin+1]-\
 		ds['vx'][margin:egy-margin,margin-1:egx-margin-1])/(2.0*dx) 
-#	if (ndim == 3):
-#	    divv=(ds['vx'](margin+1:egx-margin+1,margin:egy-margin,margin:egz-margin)-\
-#		ds['vx'](margin-1:egx-margin-1,margin:egy-margin,margin:egz-margin))/(2.0*dx) \
-#	    +(ds['vy'](margin:egx-margin,margin+1:egy-margin+1,margin:egz-margin)-\
-#		ds['vy'](margin:egx-margin,margin-1:egy-margin-1,margin:egz-margin))/(2.0*dy) \
-#	    +(ds['vz'](margin:egx-margin,margin:egy-margin,margin+1:egz-margin+1)-\
-#		ds['vz'](margin:egx-margin,margin:egy-margin,margin-1:egz-margin-1))/(2.0*dz)
+	if (ndim == 3):
+		divv=(ds['vy'][margin:egz-margin,margin+1:egy-margin+1,margin:egx-margin]-\
+		ds['vy'][margin:egz-margin,margin-1:egy-margin-1,margin:egx-margin])/(2.0*dy) \
+	    +(ds['vx'][margin:egz-margin,margin:egy-margin,margin+1:egx-margin+1]-\
+		ds['vx'][margin:egz-margin,margin:egy-margin,margin-1:egx-margin-1])/(2.0*dx) \
+	    +(ds['vz'][margin+1:egz-margin+1,margin:egy-margin,margin:egx-margin]-\
+		ds['vz'][margin+1:egz-margin+1,margin:egy-margin,margin:egx-margin])/(2.0*dz)
 	return(divv)
 ################################################################
 def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=False):
