@@ -11,7 +11,7 @@ fname='/media/snow/datadrive2/Elena_data/Convection3D_576x576x328/sim_ambi/c3d_0
 hf=h5.File(fname,'r')
 
 ro=hf.get('rho')
-pr=hf.get('pr')
+pr=hf.get('pe')
 vx=hf.get('vx')
 vy=hf.get('vy')
 vz=hf.get('vz')
@@ -25,7 +25,7 @@ bz=hf.get('bz')
 
 #Some dummy grid
 xg=np.linspace(0,1,np.size(ro[0,0,:]))
-yg=np.linspace(0,1,np.size(ro[0,:,:]))
+yg=np.linspace(0,1,np.size(ro[0,:,0]))
 zg=np.linspace(0,1,np.size(ro[:,0,0]))
 
 #subset the data here
