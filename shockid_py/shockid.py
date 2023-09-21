@@ -71,7 +71,13 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		zrow=0
 		#[col,row] = np.argwhere(divv < -convl)
 	if (ndim ==3):
-		[col,row,zrow] = np.argwhere(divv < -convl)
+		temp=np.argwhere(divv < -convl)
+		row=temp[:,2]
+		col=temp[:,1]
+		zrow=temp[:,0]
+		print(zrow)
+		stop
+		#[col,row,zrow] = np.argwhere(divv < -convl)
 		
 	
 
@@ -314,6 +320,8 @@ def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
 		ro=gaussian_filter(ro,smthfac)
 		vx=gaussian_filter(vx,smthfac)
 		vy=gaussian_filter(vy,smthfac)
+		if np.size(vz) > 1:
+			vz=gaussian_filter(vz,smthfac)
 		pr=gaussian_filter(pr,smthfac)	
 		ds={'ro':ro,'vx':vx,'vy':vy,'vz':vz,'pr':pr}
 		if species == 'plasma':
@@ -326,6 +334,7 @@ def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
 		vy=gaussian_filter(vy,smthfac)
 		vz=gaussian_filter(vz,smthfac)
 		pr=gaussian_filter(pr,smthfac)
+		ds={'ro':ro,'vx':vx,'vy':vy,'vz':vz,'pr':pr}
 		if species == 'plasma':
 			ds['bx']=gaussian_filter(bx,smthfac)
 			ds['by']=gaussian_filter(by,smthfac)
