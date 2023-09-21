@@ -24,7 +24,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	
 	#Define simulation grid
 	print('Removing ghost cells')
-	margin=2
+	margin=5
 
 	#Define the end of the grid	
 	egx=np.size(gridx)-1
@@ -360,11 +360,11 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 	if ndim == 2:
 	    normx=gradx[col,row]/gradmag[col,row]
 	    normy=grady[col,row]/gradmag[col,row]
-	"""if ndim == 3:
-	    normx=gradx(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
-	    normy=grady(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
-	    normz=gradz(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
-	"""		
+	if ndim == 3:
+	    normx=gradx[zrow,col,row]/gradmag[zrow,col,row]
+	    normy=grady[zrow,col,row]/gradmag[zrow,col,row]
+	    normz=gradz[zrow,col,row]/gradmag[zrow,col,row]
+			
 
 	tempx=np.linspace(col-avecyl,col+avecyl,2*avecyl+1)
 	tempy=np.linspace(row-avecyl,row+avecyl,2*avecyl+1)
@@ -375,6 +375,7 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 		tempz=np.linspace(zrow-avecyl,zrow+avecyl,2*avecyl+1)
 		tempz2=np.linspace(-avecyl,avecyl,2*avecyl+1)
 		
+	#print(np.shape(tempz))
 	#use periodic BC to fix negative values
 	for ii in range(0,2*avecyl+1):
 		if ndim == 2:
@@ -438,6 +439,43 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 			normvals['vpar']=normvals['perpx']*normvals['vx']+normvals['perpy']*normvals['vy']
 			normvals['ang']=np.arctan(normvals['bpar']/normvals['bperp']) 
 			return(normvals)
+		
+	if ndim == 3:
+		if gcalc == True:	
+			ronorm=shocknormvals3d(var,tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl)   
+			return(ronorm)
+		if gcalc == False:
+			ronorm=shocknormvals3d(var['ro'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl)            
+			normvals['ro']=ronorm
+			vxnorm=shocknormvals3d(var['vx'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['vx']=vxnorm
+			vynorm=shocknormvals3d(var['vy'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['vy']=vynorm
+			vznorm=shocknormvals3d(var['vz'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['vz']=vznorm
+			prnorm=shocknormvals3d(var['pr'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['pr']=prnorm
+			bxnorm=shocknormvals3d(var['bx'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['bx']=bxnorm
+			bynorm=shocknormvals3d(var['by'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['by']=bynorm
+			bznorm=var['bz']
+			if np.size(var['bz']) >1:
+				bznorm=shocknormvals3d(var['bz'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['bz']=bznorm
+			
+			stop
+			normvals['normx']=normx
+			normvals['normy']=normy
+			normvals['normz']=normz
+			normvals['perpx']=(-normy/normx)/np.sqrt(normy**2/normx**2+1.0)
+			normvals['perpy']=1.0/np.sqrt(normy**2/normx**2+1.0)
+			normvals['bperp']=normvals['normx']*normvals['bx']+normvals['normy']*normvals['by']    
+			normvals['bpar']=normvals['perpx']*normvals['bx']+normvals['perpy']*normvals['by']
+			normvals['vperp']=normvals['normx']*normvals['vx']+normvals['normy']*normvals['vy']    
+			normvals['vpar']=normvals['perpx']*normvals['vx']+normvals['perpy']*normvals['vy']
+			normvals['ang']=np.arctan(normvals['bpar']/normvals['bperp']) 
+			return(normvals)
 	
 ################################################################
 def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
@@ -450,7 +488,10 @@ def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
 	zrow2=[]
 
 	for i in range(0,np.size(col)):
-		ronorm=getNormVals(col[i],row[i],zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=True)
+		if ndim == 3:
+			ronorm=getNormVals(col[i],row[i],zrow[i],ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=True)
+		if ndim == 2:
+			ronorm=getNormVals(col[i],row[i],zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=True)
 
 		b=np.argmax(np.abs(np.gradient(ronorm)))
 #		if strat eq 1 then a=max(abs(deriv(ronorm-mrotemp)),b)
@@ -553,6 +594,40 @@ def shocknormvals(var,tempx,tempy,tempx2,tempy2,ndim,normx,normy,avecyl):
     var2=np.zeros(2*avecyl+1)
     for ii in range(0,2*avecyl+1):
         var2[ii]=rgi([normliney[ii],normlinex[ii]])
+#	var2=interp2d(tempa,tempx2,tempy2,normlinex,normliney)
+    #print(normliney)
+    return(var2)
+
+###############################################################################
+def shocknormvals3d(var,tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl):
+    #from scipy.interpolate import RegularGridInterpolator
+    import scipy.interpolate as spint
+    #print('NOT DONE SHOCKNORMVALS3D YET')
+    RGI = spint.RegularGridInterpolator
+	#Calculate the values normal to the shock
+	
+    tempa=np.zeros((2*avecyl+1,2*avecyl+1,2*avecyl+1))
+
+    #populate the arra
+    for ii in range(0,2*avecyl):
+        for jj in range(0,2*avecyl):
+            for kk in range(0,2*avecyl):
+                #print(tempz[kk],tempy[jj],tempx[ii])
+                tempa[kk,jj,ii]=var[int(tempz[kk]),int(tempy[jj]),int(tempx[ii])]
+       
+    #find the normal line
+    normlinex=normx*np.linspace(-avecyl,avecyl,avecyl*2+1)
+    normliney=normy*np.linspace(-avecyl,avecyl,avecyl*2+1)
+    normlinez=normz*np.linspace(-avecyl,avecyl,avecyl*2+1)
+	
+    pnts=[np.linspace(-avecyl,avecyl,avecyl*2+1),np.linspace(-avecyl,avecyl,avecyl*2+1),np.linspace(-avecyl,avecyl,avecyl*2+1)]
+	
+	#Interpolate the values normal to the shock
+    rgi=RGI(points=pnts,values=tempa)
+    #var2=rgi([normlinex,normliney])
+    var2=np.zeros(2*avecyl+1)
+    for ii in range(0,2*avecyl+1):
+        var2[ii]=rgi([normlinez[ii],normliney[ii],normlinex[ii]])
 #	var2=interp2d(tempa,tempx2,tempy2,normlinex,normliney)
     #print(normliney)
     return(var2)
