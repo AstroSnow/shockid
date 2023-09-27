@@ -15,7 +15,7 @@ fname='../../Reconnection/MHDtest/Data/'
 #fname='../../shockstab/Data/'
 
 ds=pipread(fname,60)
-#stopplt
+#stop
 nproc=6
     
 v1=ds['vx_p']
@@ -64,7 +64,7 @@ bz=ds['bz'][ys:ye,xs:xe]
 
 #plt.contourf(pr/ro,levels=101,cmap='Greys')
 #stop
-shocks=shockid(xg,yg,0.0,ro,vx,vy,0.0,bx,by,bz,pr,smthfac=2,nproc=nproc,convl=0.0001,avecyl=5)
+#shocks=shockid(xg,yg,0.0,ro,vx,vy,0.0,bx,by,bz,pr,smthfac=2,nproc=nproc,convl=0.0001,avecyl=5)
 fig, ax = plt.subplots(figsize=(9, 6))
 plt.contourf(np.log10(ro),levels=101,cmap='Greys')
 #stop
