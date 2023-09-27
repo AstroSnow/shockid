@@ -821,4 +821,61 @@ def shockFilter(shocks,maxDis):
 		shocks2['int4']=int4
 	
 	return(shocks2)
+
+###############################################################################
+def shockLine(loc,ds,avecyl=5,ndim=2):
+	col=loc[0]
+	row=loc[1]
+	zrow=0
 	
+	#set the arrays
+	print('Arrays are set for the full domain but only need to be local. Please fix.')
+	
+	#Define simulation grid
+	print('Removing ghost cells')
+	margin=5
+
+	#Define the end of the grid	
+	egx=np.size(ds['xgrid'])-1
+	egy=np.size(ds['ygrid'])-1
+	egz=0.0
+	if (ndim == 3):
+		egz=np.size(ds['zgrid'])-1
+
+	#Define the grid
+	x=ds['xgrid'][margin:egx-margin]
+	y=ds['ygrid'][margin:egy-margin]
+	if (ndim == 3):
+		z=ds['zgrid'][margin:egz-margin]
+
+	dx=x[1]-x[0]
+	dy=y[1]-y[0]
+	dz=0.0
+	if (ndim == 3):
+		z[1]-z[0]
+	#Smooth the data (if needed)
+	#ds=smoothdata(rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim,species,margin,smthfac)
+	
+	#Divergence of velocity field
+	print('Calculating velocity divergence')
+	divv=divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz)
+	
+	#Calculate the density gradients
+	print('Calculating density gradients')
+	gradrox=np.gradient(ds['ro'],axis=1)
+	gradroy=np.gradient(ds['ro'],axis=0)
+	gradroz=0.0
+	if (ndim == 3):
+		gradrox=np.gradient(ds['ro'],axis=2)
+		gradroy=np.gradient(ds['ro'],axis=1)
+		gradroz=np.gradient(ds['ro'],axis=0)
+	gradmag=np.sqrt(gradrox**2+gradroy**2+gradroz**2)
+	
+	#Get the properties along the shock
+	normarr=getNormVals(col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
+	#get indecies of pre and post shock states
+	[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
+#		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
+	vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
+				normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
+	speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'], normarr['ang'])

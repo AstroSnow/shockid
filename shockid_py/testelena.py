@@ -34,7 +34,7 @@ xe=-1#4000
 ys=0
 ye=-1#2000
 zs=190
-ze=200#2000
+ze=210#2000
 
 xg=xg[xs:xe]
 yg=yg[ys:ye]
@@ -51,7 +51,7 @@ bz=bz[zs:ze,ys:ye,xs:xe]
 
 #plt.contourf(pr/ro,levels=101,cmap='Greys')
 #stop
-shocks=shockid(xg,yg,zg,ro,vx,vy,vz,bx,by,bz,pr,ndim=3,smthfac=3,nproc=4,convl=0.0001,avecyl=5)
+shocks=shockid(xg,yg,zg,ro,vx,vy,vz,bx,by,bz,pr,ndim=3,smthfac=3,nproc=1,convl=0.0001,avecyl=5)
 
 stop
 
