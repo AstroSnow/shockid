@@ -24,7 +24,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	
 	#Define simulation grid
 	print('Removing ghost cells')
-	margin=2
+	margin=5
 
 	#Define the end of the grid	
 	egx=np.size(gridx)-1
@@ -41,13 +41,15 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 
 	dx=x[1]-x[0]
 	dy=y[1]-y[0]
-	dz=0.0#z[1]-z[0]
+	dz=0.0
+	if (ndim == 3):
+		z[1]-z[0]
 	#Smooth the data (if needed)
 	ds=smoothdata(rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim,species,margin,smthfac)
 
 	#Divergence of velocity field
 	print('Calculating velocity divergence')
-	divv=divergence(ds,2,margin,egx,egy,egz,dx,dy,dz)
+	divv=divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz)
 	
 	#Calculate the density gradients
 	print('Calculating density gradients')
@@ -55,7 +57,9 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	gradroy=np.gradient(ds['ro'],axis=0)
 	gradroz=0.0
 	if (ndim == 3):
-		gradroz=np.gradient(ds['ro'],axis=3)
+		gradrox=np.gradient(ds['ro'],axis=2)
+		gradroy=np.gradient(ds['ro'],axis=1)
+		gradroz=np.gradient(ds['ro'],axis=0)
 	gradmag=np.sqrt(gradrox**2+gradroy**2+gradroz**2)
 
 	#identify candidate cells based on divv
@@ -67,7 +71,11 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		zrow=0
 		#[col,row] = np.argwhere(divv < -convl)
 	if (ndim ==3):
-		[col,row,zrow] = np.argwhere(divv < -convl)
+		temp=np.argwhere(divv < -convl)
+		row=temp[:,2]
+		col=temp[:,1]
+		zrow=temp[:,0]
+		#[col,row,zrow] = np.argwhere(divv < -convl)
 		
 	
 
@@ -310,34 +318,25 @@ def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
 		ro=gaussian_filter(ro,smthfac)
 		vx=gaussian_filter(vx,smthfac)
 		vy=gaussian_filter(vy,smthfac)
+		if np.size(vz) > 1:
+			vz=gaussian_filter(vz,smthfac)
 		pr=gaussian_filter(pr,smthfac)	
-#		ro=smooth(rog(margin:egx-margin,margin:egy-margin),smthfac)
-#		vx=smooth(vxg(margin:egx-margin,margin:egy-margin),smthfac)
-#		vy=smooth(vyg(margin:egx-margin,margin:egy-margin),smthfac)
-#		vz=smooth(vzg(margin:egx-margin,margin:egy-margin),smthfac)
-#		pr=smooth(prg(margin:egx-margin,margin:egy-margin),smthfac)
 		ds={'ro':ro,'vx':vx,'vy':vy,'vz':vz,'pr':pr}
 		if species == 'plasma':
-#			bx=smooth(bxg(margin:egx-margin,margin:egy-margin),smthfac)
-#			by=smooth(byg(margin:egx-margin,margin:egy-margin),smthfac)
-#			bz=smooth(bzg(margin:egx-margin,margin:egy-margin),smthfac)
 			ds['bx']=gaussian_filter(bx,smthfac)
 			ds['by']=gaussian_filter(by,smthfac)
 			ds['bz']=gaussian_filter(bz,smthfac)
 	if (ndim == 3):
-#		ro=smooth(rog(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#		vx=smooth(vxg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#		vy=smooth(vyg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#		vz=smooth(vzg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#		pr=smooth(prg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
+		ro=gaussian_filter(ro,smthfac)
+		vx=gaussian_filter(vx,smthfac)
+		vy=gaussian_filter(vy,smthfac)
+		vz=gaussian_filter(vz,smthfac)
+		pr=gaussian_filter(pr,smthfac)
 		ds={'ro':ro,'vx':vx,'vy':vy,'vz':vz,'pr':pr}
 		if species == 'plasma':
-#			bx=smooth(bxg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#			by=smooth(byg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-#			bz=smooth(bzg(margin:egx-margin,margin:egy-margin,margin:egz-margin),smthfac)
-			ds[bx]=bx
-			ds[by]=by
-			ds[bz]=bz
+			ds['bx']=gaussian_filter(bx,smthfac)
+			ds['by']=gaussian_filter(by,smthfac)
+			ds['bz']=gaussian_filter(bz,smthfac)
 	return(ds)
 ################################################################
 #Calculate the divergence of the velocity field
@@ -347,13 +346,13 @@ def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 		ds['vy'][margin-1:egy-margin-1,margin:egx-margin])/(2.0*dy) \
 	    +(ds['vx'][margin:egy-margin,margin+1:egx-margin+1]-\
 		ds['vx'][margin:egy-margin,margin-1:egx-margin-1])/(2.0*dx) 
-#	if (ndim == 3):
-#	    divv=(ds['vx'](margin+1:egx-margin+1,margin:egy-margin,margin:egz-margin)-\
-#		ds['vx'](margin-1:egx-margin-1,margin:egy-margin,margin:egz-margin))/(2.0*dx) \
-#	    +(ds['vy'](margin:egx-margin,margin+1:egy-margin+1,margin:egz-margin)-\
-#		ds['vy'](margin:egx-margin,margin-1:egy-margin-1,margin:egz-margin))/(2.0*dy) \
-#	    +(ds['vz'](margin:egx-margin,margin:egy-margin,margin+1:egz-margin+1)-\
-#		ds['vz'](margin:egx-margin,margin:egy-margin,margin-1:egz-margin-1))/(2.0*dz)
+	if (ndim == 3):
+		divv=(ds['vy'][margin:egz-margin,margin+1:egy-margin+1,margin:egx-margin]-\
+		ds['vy'][margin:egz-margin,margin-1:egy-margin-1,margin:egx-margin])/(2.0*dy) \
+	    +(ds['vx'][margin:egz-margin,margin:egy-margin,margin+1:egx-margin+1]-\
+		ds['vx'][margin:egz-margin,margin:egy-margin,margin-1:egx-margin-1])/(2.0*dx) \
+	    +(ds['vz'][margin+1:egz-margin+1,margin:egy-margin,margin:egx-margin]-\
+		ds['vz'][margin-1:egz-margin-1,margin:egy-margin,margin:egx-margin])/(2.0*dz)
 	return(divv)
 ################################################################
 def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=False):
@@ -361,21 +360,22 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 	if ndim == 2:
 	    normx=gradx[col,row]/gradmag[col,row]
 	    normy=grady[col,row]/gradmag[col,row]
-	"""if ndim == 3:
-	    normx=gradx(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
-	    normy=grady(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
-	    normz=gradz(col(i),row(i),zrow(i))/gradmag(col(i),row(i),zrow(i))
-	"""		
+	if ndim == 3:
+	    normx=gradx[zrow,col,row]/gradmag[zrow,col,row]
+	    normy=grady[zrow,col,row]/gradmag[zrow,col,row]
+	    normz=gradz[zrow,col,row]/gradmag[zrow,col,row]
+			
 
 	tempx=np.linspace(col-avecyl,col+avecyl,2*avecyl+1)
 	tempy=np.linspace(row-avecyl,row+avecyl,2*avecyl+1)
 	tempx2=np.linspace(-avecyl,avecyl,2*avecyl+1)
 	tempy2=np.linspace(-avecyl,avecyl,2*avecyl+1)
 
-#		if ndim == 3:
-#			tempz=indgen(2*2+1)-2+zrow(i)
-#			tempz2=indgen(2*2+1)-2
-	
+	if ndim == 3:
+		tempz=np.linspace(zrow-avecyl,zrow+avecyl,2*avecyl+1)
+		tempz2=np.linspace(-avecyl,avecyl,2*avecyl+1)
+		
+	#print(np.shape(tempz))
 	#use periodic BC to fix negative values
 	for ii in range(0,2*avecyl+1):
 		if ndim == 2:
@@ -383,10 +383,13 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 				tempx[ii]=np.size(divv[:,0])+tempx[ii]
 			if tempy[ii] < 0:
 				tempy[ii]=np.size(divv[0,:])+tempy[ii]
-#		    if ndim == 3:
-#		        if tempx(ii) lt 0 then tempx(ii)=N_elements(divv(*,0,0))+tempx(ii)
-#		        if tempy(ii) lt 0 then tempy(ii)=N_elements(divv(0,*,0))+tempy(ii)
-#		        if tempz(ii) lt 0 then tempz(ii)=N_elements(divv(0,0,*))+tempz(ii)
+		if ndim == 3:
+			if tempz[ii] < 0:
+				tempz[ii]=np.size(divv[:,0,0])+tempz[ii]
+			if tempy[ii] < 0:
+				tempy[ii]=np.size(divv[0,:,0])+tempy[ii]
+			if tempx[ii] < 0:
+				tempx[ii]=np.size(divv[0,0,:])+tempx[ii]
 	    
 	#use periodic BC to fix outside grid values
 	for ii in range(0,2*avecyl+1):
@@ -395,6 +398,13 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 				tempx[ii]=tempx[ii]-np.size(divv[:,0])
 			if tempy[ii] > np.size(divv[0,:])-1:
 				tempy[ii]=tempy[ii]-np.size(divv[0,:])
+		if ndim == 3:
+			if tempx[ii] > np.size(divv[0,0,:])-1:
+				tempx[ii]=tempx[ii]-np.size(divv[0,0,:])
+			if tempy[ii] > np.size(divv[0,:,0])-1:
+				tempy[ii]=tempy[ii]-np.size(divv[0,:,0])
+			if tempz[ii] > np.size(divv[0,0,:])-1:
+				tempz[ii]=tempz[ii]-np.size(divv[0,0,:])
 				
 	#Interpolate the values normal to the shock NOTE: THES ARE NOT PARALLEL TO SHOCK YET!
 	normvals={}
@@ -429,6 +439,43 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 			normvals['vpar']=normvals['perpx']*normvals['vx']+normvals['perpy']*normvals['vy']
 			normvals['ang']=np.arctan(normvals['bpar']/normvals['bperp']) 
 			return(normvals)
+		
+	if ndim == 3:
+		if gcalc == True:	
+			ronorm=shocknormvals3d(var,tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl)   
+			return(ronorm)
+		if gcalc == False:
+			ronorm=shocknormvals3d(var['ro'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl)            
+			normvals['ro']=ronorm
+			vxnorm=shocknormvals3d(var['vx'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['vx']=vxnorm
+			vynorm=shocknormvals3d(var['vy'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['vy']=vynorm
+			vznorm=shocknormvals3d(var['vz'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['vz']=vznorm
+			prnorm=shocknormvals3d(var['pr'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['pr']=prnorm
+			bxnorm=shocknormvals3d(var['bx'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['bx']=bxnorm
+			bynorm=shocknormvals3d(var['by'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['by']=bynorm
+			bznorm=var['bz']
+			if np.size(var['bz']) >1:
+				bznorm=shocknormvals3d(var['bz'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
+			normvals['bz']=bznorm
+			
+			stop
+			normvals['normx']=normx
+			normvals['normy']=normy
+			normvals['normz']=normz
+			normvals['perpx']=(-normy/normx)/np.sqrt(normy**2/normx**2+1.0)
+			normvals['perpy']=1.0/np.sqrt(normy**2/normx**2+1.0)
+			normvals['bperp']=normvals['normx']*normvals['bx']+normvals['normy']*normvals['by']    
+			normvals['bpar']=normvals['perpx']*normvals['bx']+normvals['perpy']*normvals['by']
+			normvals['vperp']=normvals['normx']*normvals['vx']+normvals['normy']*normvals['vy']    
+			normvals['vpar']=normvals['perpx']*normvals['vx']+normvals['perpy']*normvals['vy']
+			normvals['ang']=np.arctan(normvals['bpar']/normvals['bperp']) 
+			return(normvals)
 	
 ################################################################
 def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
@@ -441,7 +488,10 @@ def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
 	zrow2=[]
 
 	for i in range(0,np.size(col)):
-		ronorm=getNormVals(col[i],row[i],zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=True)
+		if ndim == 3:
+			ronorm=getNormVals(col[i],row[i],zrow[i],ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=True)
+		if ndim == 2:
+			ronorm=getNormVals(col[i],row[i],zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=True)
 
 		b=np.argmax(np.abs(np.gradient(ronorm)))
 #		if strat eq 1 then a=max(abs(deriv(ronorm-mrotemp)),b)
@@ -544,6 +594,40 @@ def shocknormvals(var,tempx,tempy,tempx2,tempy2,ndim,normx,normy,avecyl):
     var2=np.zeros(2*avecyl+1)
     for ii in range(0,2*avecyl+1):
         var2[ii]=rgi([normliney[ii],normlinex[ii]])
+#	var2=interp2d(tempa,tempx2,tempy2,normlinex,normliney)
+    #print(normliney)
+    return(var2)
+
+###############################################################################
+def shocknormvals3d(var,tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl):
+    #from scipy.interpolate import RegularGridInterpolator
+    import scipy.interpolate as spint
+    #print('NOT DONE SHOCKNORMVALS3D YET')
+    RGI = spint.RegularGridInterpolator
+	#Calculate the values normal to the shock
+	
+    tempa=np.zeros((2*avecyl+1,2*avecyl+1,2*avecyl+1))
+
+    #populate the arra
+    for ii in range(0,2*avecyl):
+        for jj in range(0,2*avecyl):
+            for kk in range(0,2*avecyl):
+                #print(tempz[kk],tempy[jj],tempx[ii])
+                tempa[kk,jj,ii]=var[int(tempz[kk]),int(tempy[jj]),int(tempx[ii])]
+       
+    #find the normal line
+    normlinex=normx*np.linspace(-avecyl,avecyl,avecyl*2+1)
+    normliney=normy*np.linspace(-avecyl,avecyl,avecyl*2+1)
+    normlinez=normz*np.linspace(-avecyl,avecyl,avecyl*2+1)
+	
+    pnts=[np.linspace(-avecyl,avecyl,avecyl*2+1),np.linspace(-avecyl,avecyl,avecyl*2+1),np.linspace(-avecyl,avecyl,avecyl*2+1)]
+	
+	#Interpolate the values normal to the shock
+    rgi=RGI(points=pnts,values=tempa)
+    #var2=rgi([normlinex,normliney])
+    var2=np.zeros(2*avecyl+1)
+    for ii in range(0,2*avecyl+1):
+        var2[ii]=rgi([normlinez[ii],normliney[ii],normlinex[ii]])
 #	var2=interp2d(tempa,tempx2,tempy2,normlinex,normliney)
     #print(normliney)
     return(var2)
@@ -737,4 +821,61 @@ def shockFilter(shocks,maxDis):
 		shocks2['int4']=int4
 	
 	return(shocks2)
+
+###############################################################################
+def shockLine(loc,ds,avecyl=5,ndim=2):
+	col=loc[0]
+	row=loc[1]
+	zrow=0
 	
+	#set the arrays
+	print('Arrays are set for the full domain but only need to be local. Please fix.')
+	
+	#Define simulation grid
+	print('Removing ghost cells')
+	margin=5
+
+	#Define the end of the grid	
+	egx=np.size(ds['xgrid'])-1
+	egy=np.size(ds['ygrid'])-1
+	egz=0.0
+	if (ndim == 3):
+		egz=np.size(ds['zgrid'])-1
+
+	#Define the grid
+	x=ds['xgrid'][margin:egx-margin]
+	y=ds['ygrid'][margin:egy-margin]
+	if (ndim == 3):
+		z=ds['zgrid'][margin:egz-margin]
+
+	dx=x[1]-x[0]
+	dy=y[1]-y[0]
+	dz=0.0
+	if (ndim == 3):
+		z[1]-z[0]
+	#Smooth the data (if needed)
+	#ds=smoothdata(rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim,species,margin,smthfac)
+	
+	#Divergence of velocity field
+	print('Calculating velocity divergence')
+	divv=divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz)
+	
+	#Calculate the density gradients
+	print('Calculating density gradients')
+	gradrox=np.gradient(ds['ro'],axis=1)
+	gradroy=np.gradient(ds['ro'],axis=0)
+	gradroz=0.0
+	if (ndim == 3):
+		gradrox=np.gradient(ds['ro'],axis=2)
+		gradroy=np.gradient(ds['ro'],axis=1)
+		gradroz=np.gradient(ds['ro'],axis=0)
+	gradmag=np.sqrt(gradrox**2+gradroy**2+gradroz**2)
+	
+	#Get the properties along the shock
+	normarr=getNormVals(col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
+	#get indecies of pre and post shock states
+	[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
+#		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
+	vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
+				normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
+	speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'], normarr['ang'])

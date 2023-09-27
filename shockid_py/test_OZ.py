@@ -13,10 +13,11 @@ import h5py
 import gc
 
 #fname='/home/bs428/Downloads/thermal_tearing2d/adiabatic/t47/'
-fname='/media/ben/datadrive1/Samrat_Data/non_adiabatic/t47/'
+#fname='/media/ben/datadrive1/Samrat_Data/non_adiabatic/t47/'
 #fname='non_adiabatic/t47/'
 
-fname='/media/ben/datadrive1/Reconnection/OZ/testdata.0070.h5'
+#fname='/media/ben/datadrive1/Reconnection/OZ/testdata.0070.h5'
+fname='/media/snow/datadrive/OZdata/MHD_OZ_hr_h5/testdata.0060.h5'
 
 with h5py.File(fname, "r") as f:
     # List all groups
@@ -51,8 +52,8 @@ with h5py.File(fname, "r") as f:
     gc.collect()
 
 margin=2
-egx=np.size(vx[0,:])
-egy=np.size(vx[:,0])
+egx=np.size(ro[0,:])
+egy=np.size(ro[:,0])
 dx=1
 dy=1
 
@@ -66,19 +67,21 @@ yg=np.linspace(0,egy,egy)
 
 
 trxs=4500
-trxe=7500#egx#8000
+trxe=8200#egx#8000
 trys=7700#6000
 trye=9500#egy#8000
 
 
-fig, ax = plt.subplots(figsize=(9, 6))
+fig, ax = plt.subplots(figsize=(9, 6),dpi=300)
 #plt.contourf(divv)
 #plt.contourf(divv[:,950:1150],levels=np.linspace(-0.055,-0.00001,100))
 #ax.contourf(np.log10(-divv.T),levels=101)
 ax.contourf(ro[trys:trye,trxs:trxe],levels=101,cmap='Greys')
 #plt.ylim([950, 1100])
 
-nproc=10
+#stop
+
+nproc=30
 shocks=shockid(xg[trxs:trxe],yg[trys:trye],0.0,ro[trys:trye,trxs:trxe],
 			   vx[trys:trye,trxs:trxe],vy[trys:trye,trxs:trxe],0.0,
 			   bx[trys:trye,trxs:trxe],by[trys:trye,trxs:trxe],0.0,
@@ -100,7 +103,7 @@ i4=ax.plot(shocks['int4'][:,1],shocks['int4'][:,0],color='g',linestyle='',marker
 		plt.plot(shocks['fast'][j][:,1],shocks['fast'][j][:,0],color='b',marker='+',linestyle='',markersize=2.5)
 		#plt.plot(shocks['int4'][j][:,1],shocks['int4'][j][:,0],color='g',marker='+',linestyle='',markersize=2.5)
 """
-savename='OZ_test_70.png'
+savename=''.join((fname,'shocks.png'))
 plt.savefig(savename)
 
 #Create a h5 file of the shock data
