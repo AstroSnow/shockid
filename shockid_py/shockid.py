@@ -879,3 +879,9 @@ def shockLine(loc,ds,avecyl=5,ndim=2):
 	vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
 				normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
 	speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'], normarr['ang'])
+	lineData={}
+	lineData['vsa']=vsa
+	lineData['speeds']=speeds
+	lineData['normarr']=normarr
+	
+	return(lineData)

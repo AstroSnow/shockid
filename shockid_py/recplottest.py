@@ -9,13 +9,16 @@ from pipreadmods import pipread
 import matplotlib.pyplot as plt
 import numpy as np
 from shockid import shockid
+import h5py
 
 #fname='../../Reconnection/MHDtest/Data/'
 #fname='../../Reconnection/recdata/mhd_test_5/'
-fname='../../Reconnection/recdata/mhd_rad/'
+#fname='../../Reconnection/recdata/mhd_rad/'
+#fname='../../Reconnection/mhd_8k/'
+fname='../../Reconnection/mhd_rad/'
 #fname='../../shockstab/Data/'
 
-ds=pipread(fname,60)
+ds=pipread(fname,40)
 #stop
 nproc=6
 
@@ -48,10 +51,10 @@ T=ds['pr_p']/ds['ro_p']
 #plt.plot(row,col,color='r',linestyle='',marker='.',markersize=2.8)
 
 #subset the data here
-xs=800
-xe=2000
-ys=0000
-ye=2000
+xs=000
+xe=4000
+ys=250
+ye=750
 
 xg=ds['xgrid'][xs:xe]
 yg=ds['ygrid'][ys:ye]
@@ -69,6 +72,12 @@ bz=ds['bz'][ys:ye,xs:xe]
 
 shocks=shockid(xg,yg,0.0,ro,vx,vy,0.0,bx,by,bz,pr,smthfac=3,nproc=nproc,convl=0.0001,avecyl=5)
 
+#Create a h5 file of the shock data
+hf = h5py.File(''.join((fname,'shocks.h5')), 'w')
+for f in shocks:
+	hf.create_dataset(f, data=shocks[f])
+hf.close()
+
 fig, ax = plt.subplots(figsize=(9, 6))
 plt.contourf(np.log10(ro),levels=101,cmap='Greys')
 #stop
@@ -79,5 +88,5 @@ plt.plot(shocks['int2'][:,1],shocks['int2'][:,0],color='m',linestyle='',marker='
 plt.plot(shocks['int3'][:,1],shocks['int3'][:,0],color='c',linestyle='',marker='.',markersize=2.8)
 plt.plot(shocks['int4'][:,1],shocks['int4'][:,0],color='g',linestyle='',marker='.',markersize=2.8)
 
-#savename='MHDtest5_30_full.png'
+#savename='MHD_8k_shock.png'
 #plt.savefig(savename)
