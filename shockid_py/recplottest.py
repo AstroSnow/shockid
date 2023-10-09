@@ -9,14 +9,18 @@ from pipreadmods import pipread
 import matplotlib.pyplot as plt
 import numpy as np
 from shockid import shockid
+import h5py as h5
 
-fname='../../Reconnection/MHDtest/Data/'
-#fname='../../Reconnection/mhd_test_2/'
+#fname='../../Reconnection/MHDtest/Data/'
+#fname='../../Reconnection/Reconnection/mhd_test_5/'
+#fname='../../Reconnection/Reconnection/mhd_test_narrow2/'
+#fname='../../Reconnection/Reconnection/mhd_rad/'
+fname='/media/ben/SnowM2/mhd_rad/'
 #fname='../../shockstab/Data/'
 
-ds=pipread(fname,60)
+ds=pipread(fname,40)
 #stopplt
-nproc=6
+nproc=10
     
 v1=ds['vx_p']
 v2=ds['vy_p']
@@ -49,7 +53,7 @@ T=ds['pr_p']/ds['ro_p']
 xs=0
 xe=-1#4000
 ys=0
-ye=1000
+ye=2000
 
 xg=ds['xgrid'][xs:xe]
 yg=ds['ygrid'][ys:ye]
@@ -57,6 +61,7 @@ ro=ds['ro_p'][ys:ye,xs:xe]
 pr=ds['pr_p'][ys:ye,xs:xe]
 vx=ds['vx_p'][ys:ye,xs:xe]
 vy=ds['vy_p'][ys:ye,xs:xe]
+vz=ds['vz_p'][ys:ye,xs:xe]
 bx=ds['bx'][ys:ye,xs:xe]
 by=ds['by'][ys:ye,xs:xe]
 bz=ds['bz'][ys:ye,xs:xe]
@@ -64,9 +69,23 @@ bz=ds['bz'][ys:ye,xs:xe]
 
 #plt.contourf(pr/ro,levels=101,cmap='Greys')
 #stop
-shocks=shockid(xg,yg,0.0,ro,vx,vy,0.0,bx,by,bz,pr,smthfac=2,nproc=nproc,convl=0.0001,avecyl=5)
+shocks=shockid(xg,yg,0.0,ro,vx,vy,vz,bx,by,bz,pr,smthfac=2,nproc=nproc,convl=0.0001,avecyl=5)
+saveShocks=True
+if saveShocks:
+	#Create a h5 file of the shock data
+	hf = h5.File(''.join((fname,'shocks.h5')), 'w')
+	for f in shocks:
+		hf.create_dataset(f, data=shocks[f])
+	hf.create_dataset('xs',data=xs)
+	hf.create_dataset('xe',data=xe)
+	hf.create_dataset('ys',data=ys)
+	hf.create_dataset('ye',data=ye)
+	hf.create_dataset('fname',data=fname)
+	hf.close()
+
 fig, ax = plt.subplots(figsize=(9, 6))
 plt.contourf(np.log10(ro),levels=101,cmap='Greys')
+#plt.contourf(ro*(vx**2+vy**2+vz**2),levels=101,cmap='Greys')
 #stop
 plt.plot(shocks['slow'][:,1],shocks['slow'][:,0],color='r',linestyle='',marker='.',markersize=2.8)
 plt.plot(shocks['fast'][:,1],shocks['fast'][:,0],color='b',linestyle='',marker='.',markersize=2.8)
@@ -75,5 +94,5 @@ plt.plot(shocks['int2'][:,1],shocks['int2'][:,0],color='m',linestyle='',marker='
 plt.plot(shocks['int3'][:,1],shocks['int3'][:,0],color='c',linestyle='',marker='.',markersize=2.8)
 plt.plot(shocks['int4'][:,1],shocks['int4'][:,0],color='g',linestyle='',marker='.',markersize=2.8)
 
-savename='MHDtest_40.png'
-plt.savefig(savename)
+#savename='MHD_test_5_10.png'
+#plt.savefig(savename)
