@@ -21,6 +21,7 @@ fname='/media/ben/SnowM2/mhd_rad/'
 ds=pipread(fname,40)
 #stopplt
 nproc=10
+
     
 v1=ds['vx_p']
 v2=ds['vy_p']
@@ -55,6 +56,7 @@ xe=-1#4000
 ys=0
 ye=2000
 
+
 xg=ds['xgrid'][xs:xe]
 yg=ds['ygrid'][ys:ye]
 ro=ds['ro_p'][ys:ye,xs:xe]
@@ -83,6 +85,7 @@ if saveShocks:
 	hf.create_dataset('fname',data=fname)
 	hf.close()
 
+
 fig, ax = plt.subplots(figsize=(9, 6))
 plt.contourf(np.log10(ro),levels=101,cmap='Greys')
 #plt.contourf(ro*(vx**2+vy**2+vz**2),levels=101,cmap='Greys')
@@ -93,6 +96,7 @@ plt.plot(shocks['int1'][:,1],shocks['int1'][:,0],color='y',linestyle='',marker='
 plt.plot(shocks['int2'][:,1],shocks['int2'][:,0],color='m',linestyle='',marker='.',markersize=2.8)
 plt.plot(shocks['int3'][:,1],shocks['int3'][:,0],color='c',linestyle='',marker='.',markersize=2.8)
 plt.plot(shocks['int4'][:,1],shocks['int4'][:,0],color='g',linestyle='',marker='.',markersize=2.8)
+
 
 #savename='MHD_test_5_10.png'
 #plt.savefig(savename)

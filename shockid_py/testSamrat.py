@@ -12,8 +12,8 @@ from shockid import shockid
 import h5py
 
 #fname='/home/bs428/Downloads/thermal_tearing2d/adiabatic/t47/'
-fname='/media/ben/datadrive1/Samrat_Data/non_adiabatic/t47/'
-#fname='non_adiabatic/t47/'
+#fname='/media/ben/datadrive1/Samrat_Data/non_adiabatic/t47/'
+fname='non_adiabatic/t47/'
 
 with open(''.join((fname,'v1_t47.dat'))) as file:
     next(file)
@@ -69,7 +69,7 @@ ax.contourf(np.log10(rho).T,levels=101,cmap='Greys')
 plt.ylim([950, 1100])
 
 nproc=4
-shocks=shockid(xg,yg,0.0,rho.T,v1.T,v2.T,0.0,b1.T,b2.T,0.0,pr.T,smthfac=0,nproc=nproc)
+shocks=shockid(xg,yg,0.0,rho.T,v1.T,v2.T,0.0,b1.T,b2.T,0.0,pr.T,smthfac=2,nproc=nproc)
 
 #if nproc == 1:
 plt.plot(shocks['slow'][:,1],shocks['slow'][:,0],color='r',marker='+',linestyle='',markersize=2.5)
