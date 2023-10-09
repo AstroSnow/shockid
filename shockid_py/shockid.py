@@ -829,10 +829,10 @@ def shockLine(loc,ds,avecyl=5,ndim=2):
 	zrow=0
 	
 	#set the arrays
-	print('Arrays are set for the full domain but only need to be local. Please fix.')
+	#print('Arrays are set for the full domain but only need to be local. Please fix.')
 	
 	#Define simulation grid
-	print('Removing ghost cells')
+	#print('Removing ghost cells')
 	margin=5
 
 	#Define the end of the grid	
@@ -857,11 +857,11 @@ def shockLine(loc,ds,avecyl=5,ndim=2):
 	#ds=smoothdata(rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim,species,margin,smthfac)
 	
 	#Divergence of velocity field
-	print('Calculating velocity divergence')
+	#print('Calculating velocity divergence')
 	divv=divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz)
 	
 	#Calculate the density gradients
-	print('Calculating density gradients')
+	#print('Calculating density gradients')
 	gradrox=np.gradient(ds['ro'],axis=1)
 	gradroy=np.gradient(ds['ro'],axis=0)
 	gradroz=0.0
