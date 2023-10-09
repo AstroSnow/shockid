@@ -627,9 +627,9 @@ def shockFilter(shocks,maxDis):
 		slowx=np.delete(shocks['slow'][:,1],isol)
 		slowy=np.delete(shocks['slow'][:,0],isol)
 		slow=np.zeros(shape=(np.size(slowx),2))
-		slow[:,1]=slowx
-		slow[:,0]=slowy
-		shocks2['slow']=slow
+		slow[:,1]=slowx.astype('int')
+		slow[:,0]=slowy.astype('int')
+		shocks2['slow']=slow.astype('int')
 	
 	#fast shocks
 	if np.size(shocks['fast'][:,1]) > 2:
@@ -648,9 +648,9 @@ def shockFilter(shocks,maxDis):
 		fastx=np.delete(shocks['fast'][:,1],isol)
 		fasty=np.delete(shocks['fast'][:,0],isol)
 		fast=np.zeros(shape=(np.size(fastx),2))
-		fast[:,1]=fastx
-		fast[:,0]=fasty
-		shocks2['fast']=fast
+		fast[:,1]=fastx.astype('int')
+		fast[:,0]=fasty.astype('int')
+		shocks2['fast']=fast.astype('int')
 	
 	#int1 shocks
 	if np.size(shocks['int1'][:,1]) > 2:
@@ -669,9 +669,9 @@ def shockFilter(shocks,maxDis):
 		int1x=np.delete(shocks['int1'][:,1],isol)
 		int1y=np.delete(shocks['int1'][:,0],isol)
 		int1=np.zeros(shape=(np.size(int1x),2))
-		int1[:,1]=int1x
-		int1[:,0]=int1y
-		shocks2['int1']=int1
+		int1[:,1]=int1x.astype('int')
+		int1[:,0]=int1y.astype('int')
+		shocks2['int1']=int1.astype('int')
 	
 	#int1 shocks
 	if np.size(shocks['int2'][:,1]) > 2:
@@ -690,9 +690,9 @@ def shockFilter(shocks,maxDis):
 		int2x=np.delete(shocks['int2'][:,1],isol)
 		int2y=np.delete(shocks['int2'][:,0],isol)
 		int2=np.zeros(shape=(np.size(int2x),2))
-		int2[:,1]=int2x
-		int2[:,0]=int2y
-		shocks2['int2']=int2
+		int2[:,1]=int2x.astype('int')
+		int2[:,0]=int2y.astype('int')
+		shocks2['int2']=int2.astype('int')
 	
 	#int1 shocks
 	if np.size(shocks['int3'][:,1]) > 2:
@@ -711,9 +711,9 @@ def shockFilter(shocks,maxDis):
 		int3x=np.delete(shocks['int3'][:,1],isol)
 		int3y=np.delete(shocks['int3'][:,0],isol)
 		int3=np.zeros(shape=(np.size(int3x),2))
-		int3[:,1]=int3x
-		int3[:,0]=int3y
-		shocks2['int3']=int3
+		int3[:,1]=int3x.astype('int')
+		int3[:,0]=int3y.astype('int')
+		shocks2['int3']=int3.astype('int')
 	
 	#int1 shocks
 	if np.size(shocks['int4'][:,1]) > 2:
@@ -732,9 +732,9 @@ def shockFilter(shocks,maxDis):
 		int4x=np.delete(shocks['int4'][:,1],isol)
 		int4y=np.delete(shocks['int4'][:,0],isol)
 		int4=np.zeros(shape=(np.size(int4x),2))
-		int4[:,1]=int4x
-		int4[:,0]=int4y
-		shocks2['int4']=int4
+		int4[:,1]=int4x.astype('int')
+		int4[:,0]=int4y.astype('int')
+		shocks2['int4']=int4.astype('int')
 	
 	return(shocks2)
 	
