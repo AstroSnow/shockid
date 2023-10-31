@@ -43,7 +43,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	dy=y[1]-y[0]
 	dz=0.0
 	if (ndim == 3):
-		z[1]-z[0]
+		dz=z[1]-z[0]
 	#Smooth the data (if needed)
 	ds=smoothdata(rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim,species,margin,smthfac)
 
@@ -75,9 +75,34 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		row=temp[:,2]
 		col=temp[:,1]
 		zrow=temp[:,0]
-		#[col,row,zrow] = np.argwhere(divv < -convl)
 		
-	
+		#Remove the edges
+		earr=np.argwhere(col < egx-margin-avecyl-1).flatten()
+		col=col[earr]
+		row=row[earr]
+		zrow=zrow[earr]
+		earr=np.argwhere(col >margin+avecyl+1).flatten()
+		col=col[earr]
+		row=row[earr]
+		zrow=zrow[earr]
+		earr=np.argwhere(row < egx-margin-avecyl-1).flatten()
+		col=col[earr]
+		row=row[earr]
+		zrow=zrow[earr]
+		earr=np.argwhere(row >margin+avecyl+1).flatten()
+		col=col[earr]
+		row=row[earr]
+		zrow=zrow[earr]
+		earr=np.argwhere(zrow < egx-margin-avecyl-1).flatten()
+		col=col[earr]
+		row=row[earr]
+		zrow=zrow[earr]
+		earr=np.argwhere(zrow >margin+avecyl+1).flatten()
+		col=col[earr]
+		row=row[earr]
+		zrow=zrow[earr]
+		
+		#[col,row,zrow] = np.argwhere(divv < -convl)
 
 	"""#Filter the data 
 	if data_subset == 1:
@@ -116,7 +141,10 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	#print('Removing non-local maximum candidates')
 	time1=time.perf_counter()
 	if nproc == 1:
-		[col,row]=removeNonMax(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2)
+		if ndim ==2:
+			[col,row]=removeNonMax(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2)
+		if ndim ==3:
+			[col,row,zrow]=removeNonMax(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2)
 	if nproc > 1:
 		[col,row]=removeNonMaxPar(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2,nproc)
 	time2=time.perf_counter()
@@ -141,7 +169,10 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	
 		for i in range(0,np.size(col)):
 			#Calcuate data along the LOS
-			normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
+			if ndim ==2:
+				normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
+			if ndim ==3:
+				normarr=getNormVals(col[i],row[i],zrow[i],ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
 			#get indecies of pre and post shock states
 			[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
 			#vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
@@ -347,7 +378,8 @@ def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 	    +(ds['vx'][margin:egy-margin,margin+1:egx-margin+1]-\
 		ds['vx'][margin:egy-margin,margin-1:egx-margin-1])/(2.0*dx) 
 	if (ndim == 3):
-		divv=(ds['vy'][margin:egz-margin,margin+1:egy-margin+1,margin:egx-margin]-\
+		divv=np.zeros((egz,egy,egx))
+		divv[margin:egz-margin,margin:egy-margin,margin:egx-margin]=(ds['vy'][margin:egz-margin,margin+1:egy-margin+1,margin:egx-margin]-\
 		ds['vy'][margin:egz-margin,margin-1:egy-margin-1,margin:egx-margin])/(2.0*dy) \
 	    +(ds['vx'][margin:egz-margin,margin:egy-margin,margin+1:egx-margin+1]-\
 		ds['vx'][margin:egz-margin,margin:egy-margin,margin-1:egx-margin-1])/(2.0*dx) \
@@ -361,16 +393,21 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 	    normx=gradx[col,row]/gradmag[col,row]
 	    normy=grady[col,row]/gradmag[col,row]
 	if ndim == 3:
-	    normx=gradx[zrow,col,row]/gradmag[zrow,col,row]
-	    normy=grady[zrow,col,row]/gradmag[zrow,col,row]
-	    normz=gradz[zrow,col,row]/gradmag[zrow,col,row]
-			
-
+		if gradmag[zrow,col,row] <= 1.0e-16:
+		    normx=0
+		    normy=0
+		    normz=0		
+		else:
+			normx=gradx[zrow,col,row]/gradmag[zrow,col,row]
+			normy=grady[zrow,col,row]/gradmag[zrow,col,row]
+			normz=gradz[zrow,col,row]/gradmag[zrow,col,row]
+	#print(zrow,col,row,normx,normy,normz,np.argmax(gradx),grady[zrow,col,row],gradz[zrow,col,row],gradmag[zrow,col,row])		
+	#stop
 	tempx=np.linspace(col-avecyl,col+avecyl,2*avecyl+1)
 	tempy=np.linspace(row-avecyl,row+avecyl,2*avecyl+1)
 	tempx2=np.linspace(-avecyl,avecyl,2*avecyl+1)
 	tempy2=np.linspace(-avecyl,avecyl,2*avecyl+1)
-
+	
 	if ndim == 3:
 		tempz=np.linspace(zrow-avecyl,zrow+avecyl,2*avecyl+1)
 		tempz2=np.linspace(-avecyl,avecyl,2*avecyl+1)
@@ -464,17 +501,29 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 				bznorm=shocknormvals3d(var['bz'],tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl) 
 			normvals['bz']=bznorm
 			
-			stop
 			normvals['normx']=normx
 			normvals['normy']=normy
 			normvals['normz']=normz
-			normvals['perpx']=(-normy/normx)/np.sqrt(normy**2/normx**2+1.0)
-			normvals['perpy']=1.0/np.sqrt(normy**2/normx**2+1.0)
-			normvals['bperp']=normvals['normx']*normvals['bx']+normvals['normy']*normvals['by']    
-			normvals['bpar']=normvals['perpx']*normvals['bx']+normvals['perpy']*normvals['by']
-			normvals['vperp']=normvals['normx']*normvals['vx']+normvals['normy']*normvals['vy']    
-			normvals['vpar']=normvals['perpx']*normvals['vx']+normvals['perpy']*normvals['vy']
+			
+			normvals['bperp']=normvals['normx']*normvals['bx']+normvals['normy']*normvals['by']+normvals['normz']*normvals['bz']    
+			normvals['vperp']=normvals['normx']*normvals['vx']+normvals['normy']*normvals['vy']+normvals['normz']*normvals['vz']
+			
+			print(ronorm)
+			print(normvals['vperp'])
+			print(prnorm)
+			
+			[bpar,vpar]=shockPerpDir3D(var['ro'],var['vx'],var['vy'],var['vz'],var['bx'],var['by'],var['bz'],normx,normy,normz,
+							  avecyl,col,row,zrow)
+			normvals['bpar']=bpar
+			normvals['vpar']=vpar
+			
 			normvals['ang']=np.arctan(normvals['bpar']/normvals['bperp']) 
+			stop
+			
+			#normvals['perpx']=(-normy/normx)/np.sqrt(normy**2/normx**2+1.0)
+			#normvals['perpy']=1.0/np.sqrt(normy**2/normx**2+1.0)
+			#normvals['bpar']=normvals['perpx']*normvals['bx']+normvals['perpy']*normvals['by']
+			#normvals['vpar']=normvals['perpx']*normvals['vx']+normvals['perpy']*normvals['vy']
 			return(normvals)
 	
 ################################################################
@@ -486,27 +535,39 @@ def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
 	col2=[]
 	row2=[]
 	zrow2=[]
+	#print(np.max(row),np.argmin(divv[2:-3,2:-3,2:-3]),np.argmax(gradmag))
+	#stop
 
 	for i in range(0,np.size(col)):
 		if ndim == 3:
-			ronorm=getNormVals(col[i],row[i],zrow[i],ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=True)
+			ronorm=getNormVals(col[i],row[i],zrow[i],ro,gradx,grady,gradz,gradmag,divv,ndim,2,gcalc=True)
 		if ndim == 2:
 			ronorm=getNormVals(col[i],row[i],zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=True)
 
 		b=np.argmax(np.abs(np.gradient(ronorm)))
 #		if strat eq 1 then a=max(abs(deriv(ronorm-mrotemp)),b)
-		#print(np.gradient(ronorm))
+		#print(ronorm)
+		#print(np.abs(np.gradient(ronorm)))
+		#print(b)
+		#stop
+		#print(zrow[i],col[i],row[i])
+		#stop
 		if b == 2:
+			#print(row[i],col[i],zrow[i])
 			row2.append(row[i])#=[row2,row[i]]
 			col2.append(col[i])#=[col2,col[i]]
-#		if ndim eq 3 then zrow2=[zrow2,zrow(i)]
+			if ndim == 3:
+				zrow2.append(zrow[i])
 		
 	row=row2
 	col=col2
 	if ndim==3:
 		zrow=zrow2
 		
-	return(col,row)
+	if ndim==2:		
+		return(col,row)
+	if ndim==3:		
+		return(col,row,zrow)
 ################################################################
 def removeNonMaxPar(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,nproc):
 	import numpy as np
@@ -607,30 +668,206 @@ def shocknormvals3d(var,tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz
 	#Calculate the values normal to the shock
 	
     tempa=np.zeros((2*avecyl+1,2*avecyl+1,2*avecyl+1))
-
-    #populate the arra
-    for ii in range(0,2*avecyl):
-        for jj in range(0,2*avecyl):
-            for kk in range(0,2*avecyl):
+    #populate the array
+    for ii in range(0,2*avecyl+1):
+        for jj in range(0,2*avecyl+1):
+            for kk in range(0,2*avecyl+1):
                 #print(tempz[kk],tempy[jj],tempx[ii])
-                tempa[kk,jj,ii]=var[int(tempz[kk]),int(tempy[jj]),int(tempx[ii])]
+                tempa[kk,jj,ii]=var[int(tempz[kk]),int(tempx[jj]),int(tempy[ii])]
        
     #find the normal line
     normlinex=normx*np.linspace(-avecyl,avecyl,avecyl*2+1)
     normliney=normy*np.linspace(-avecyl,avecyl,avecyl*2+1)
     normlinez=normz*np.linspace(-avecyl,avecyl,avecyl*2+1)
 	
+    #print(normx,normy,normz)
+	
     pnts=[np.linspace(-avecyl,avecyl,avecyl*2+1),np.linspace(-avecyl,avecyl,avecyl*2+1),np.linspace(-avecyl,avecyl,avecyl*2+1)]
 	
+    #print(tempa)
+    #stop
 	#Interpolate the values normal to the shock
     rgi=RGI(points=pnts,values=tempa)
     #var2=rgi([normlinex,normliney])
     var2=np.zeros(2*avecyl+1)
     for ii in range(0,2*avecyl+1):
+        #print(normlinez[ii],normliney[ii],normlinex[ii])
         var2[ii]=rgi([normlinez[ii],normliney[ii],normlinex[ii]])
 #	var2=interp2d(tempa,tempx2,tempy2,normlinex,normliney)
     #print(normliney)
     return(var2)
+###############################################################################
+def shockPerpDir3D(ro,vx,vy,vz,bx,by,bz,normx,normy,normz,avecyl,col,row,zrow):
+	import scipy.interpolate as spint
+	RGI = spint.RegularGridInterpolator
+	################################
+	#Define a plane
+	planearr=np.zeros((3,2*avecyl+1,2*avecyl+1))
+
+	#vector normal to the shock normal (v.w=0 if vectors are perpendicular)
+	v1x=normy
+	v1y=-normx
+	v1z=0.0
+	if (normx == 0):
+		v1x=0.0
+		v1y=-normz
+		v1z=normy
+	if (normy == 0):
+		v1x=normz
+		v1y=0.0
+		v1z=-normx
+
+	v2x=normy*v1z-normz*v1y
+	v2y=-normx*v1z+normz*v1x
+	v2z=normx*v1y-normy*v1x
+
+	px=np.linspace(-avecyl,avecyl,avecyl*2+1)                                        
+	py=np.linspace(-avecyl,avecyl,avecyl*2+1)
+	pz=np.linspace(-avecyl,avecyl,avecyl*2+1)                              
+	for j in range(0,2*avecyl+1):                              
+	    for k in range(0,2*avecyl+1):                                
+	        planearr[0,j,k]=v1z*px[j]+v2z*py[k]+zrow
+	        planearr[1,j,k]=v1y*px[j]+v2y*py[k]+col
+	        planearr[2,j,k]=(v1x*px[j]+v2x*py[k])+row
+	    
+	
+	print(planearr)
+	#stop
+	
+	#########################
+    #Get the variables in this plane
+	ppro=np.zeros((2*avecyl+1,2*avecyl+1))
+	ppvx=np.zeros((2*avecyl+1,2*avecyl+1))
+	ppvy=np.zeros((2*avecyl+1,2*avecyl+1))
+	ppvz=np.zeros((2*avecyl+1,2*avecyl+1))
+	ppbx=np.zeros((2*avecyl+1,2*avecyl+1))
+	ppby=np.zeros((2*avecyl+1,2*avecyl+1))
+	ppbz=np.zeros((2*avecyl+1,2*avecyl+1))
+    #pppr=dblarr(3,3)
+	
+	a=np.shape(ro)
+	x=np.linspace(0,a[2]-1,a[2])
+	y=np.linspace(0,a[1]-1,a[1])
+	z=np.linspace(0,a[0]-1,a[0])
+	ro_rgi=RGI(points=(z,y,x),values=ro)
+	vx_rgi=RGI(points=(z,y,x),values=vx)
+	vy_rgi=RGI(points=(z,y,x),values=vy)
+	vz_rgi=RGI(points=(z,y,x),values=vz)
+	bx_rgi=RGI(points=(z,y,x),values=bx)
+	by_rgi=RGI(points=(z,y,x),values=by)
+	bz_rgi=RGI(points=(z,y,x),values=bz)
+	
+	for j in range(0,2*avecyl+1):
+		for k in range(0,2*avecyl+1):
+			ppro[j,k]=ro_rgi([planearr[0,j,k],planearr[1,j,k],planearr[2,j,k]])
+			ppvx[j,k]=vx_rgi([planearr[0,j,k],planearr[1,j,k],planearr[2,j,k]])
+			ppvy[j,k]=vy_rgi([planearr[0,j,k],planearr[1,j,k],planearr[2,j,k]])
+			ppvz[j,k]=vz_rgi([planearr[0,j,k],planearr[1,j,k],planearr[2,j,k]])
+			ppbx[j,k]=bx_rgi([planearr[0,j,k],planearr[1,j,k],planearr[2,j,k]])
+			ppby[j,k]=by_rgi([planearr[0,j,k],planearr[1,j,k],planearr[2,j,k]])
+			ppbz[j,k]=bz_rgi([planearr[0,j,k],planearr[1,j,k],planearr[2,j,k]])
+			#ppvx[j,k]=interpolate(vx,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+			#ppvy[j,k]=interpolate(vy,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+			#ppvz[j,k]=interpolate(vz,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+			#ppbx[j,k]=interpolate(bx,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+			#ppby[j,k]=interpolate(by,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+			#ppbz[j,k]=interpolate(bz,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+		#pppr(j,k)=interpolate(pr,pplane(0,j,k)+col(i),pplane(1,j,k)+row(i),pplane(2,j,k)+zrow(i))
+	#print(ppro)
+	
+	#get the direction of the maximum gradient in the plane
+	ppgradrox=np.gradient(ppro,axis=0)
+	ppgradroy=np.gradient(ppro,axis=1)
+	#ppgradvxx=np.gradient(ppvx,axis=0)
+	#ppgradvxy=np.gradient(ppvx,axis=1)
+	#ppgradvyx=np.gradient(ppvy,axis=0)
+	#ppgradvyy=np.gradient(ppvy,axis=1)
+	#ppgradvzx=np.gradient(ppvz,axis=0)
+	#ppgradvzy=np.gradient(ppvz,axis=1)
+	#ppgradbxx=np.gradient(ppbx,axis=0)
+	#ppgradbxy=np.gradient(ppbx,axis=1)
+	#ppgradbyx=np.gradient(ppby,axis=0)
+	#ppgradbyy=np.gradient(ppby,axis=1)
+	#ppgradbzx=np.gradient(ppbz,axis=0)
+	#ppgradbzy=np.gradient(ppbz,axis=1)
+	
+	#Need to do this for all variables
+	if (ppgradrox[avecyl,avecyl]+ppgradroy[avecyl,avecyl]) <=1.0e-8:
+		perpx=1.0
+		perpy=0.0
+	else:
+		perpx=ppgradrox[avecyl,avecyl]/(ppgradrox[avecyl,avecyl]+ppgradroy[avecyl,avecyl])
+		perpy=ppgradroy[avecyl,avecyl]/(ppgradrox[avecyl,avecyl]+ppgradroy[avecyl,avecyl])
+	
+	INTERPOLATE THE VALUES ALONG THE DIRECTION
+	stop
+	"""#get the gradient of all variables along the plane
+	ppgrox=max([ppro(2,1)-ppro(0,1),$
+			 ppvx(2,1)-ppvx(0,1),$
+                    ppvy(2,1)-ppvy(0,1),$
+                    ppvz(2,1)-ppvz(0,1),$
+                    ppbx(2,1)-ppbx(0,1),$
+                    ppby(2,1)-ppby(0,1),$
+                    ppbz(2,1)-ppbz(0,1),$
+                    pppr(2,1)-pppr(0,1)])
+        ppgroy=max([ppro(1,2)-ppro(1,0),$
+                    ppvx(1,2)-ppvx(1,0),$
+                    ppvy(1,2)-ppvy(1,0),$
+                    ppvz(1,2)-ppvz(1,0),$
+                    ppbx(1,2)-ppbx(1,0),$
+                    ppby(1,2)-ppby(1,0),$
+                    ppbz(1,2)-ppbz(1,0),$
+                    pppr(1,2)-pppr(1,0)])
+    endif
+    if species eq 'neutral' then begin
+        ppgrox=max([ppro(2,1)-ppro(0,1),$
+                    ppvx(2,1)-ppvx(0,1),$
+                    ppvy(2,1)-ppvy(0,1),$
+                    ppvz(2,1)-ppvz(0,1),$
+                    pppr(2,1)-pppr(0,1)])
+        ppgroy=max([ppro(1,2)-ppro(1,0),$
+                    ppvx(1,2)-ppvx(1,0),$
+                    ppvy(1,2)-ppvy(1,0),$
+                    ppvz(1,2)-ppvz(1,0),$
+                    pppr(1,2)-pppr(1,0)])
+    endif
+    if abs(ppgrox+ppgroy) lt 1.0e-8 then begin
+;print,'this doesnt work for z direction'
+        perparr=[normy,normx,normz]
+        if (abs(normx) eq 1) then perparr=[normy,normx,normz]
+        if (abs(normy) eq 1) then perparr=[normy,normx,normz]
+        if (abs(normz) eq 1) then perparr=[normz,normy,normx]
+    perpx=perparr(0)
+    perpy=perparr(1)
+    perpz=perparr(2)
+    endif else if abs(ppgrox) lt 1.0e-8 then begin
+        ppx=0.0
+        ppy=1.0
+    perpx=normy*ppx-normz*ppy
+    perpy=-normx*ppx
+    perpz=normx*ppy
+    endif else if abs(ppgroy) lt 1.0e-8 then begin
+        ppx=1.0
+        ppy=0.0
+    perpx=normy*ppx-normz*ppy
+    perpy=-normx*ppx
+    perpz=normx*ppy
+    endif else begin
+        ppx=ppgrox/sqrt(ppgrox^2+ppgroy^2)
+        ppy=ppgroy/sqrt(ppgrox^2+ppgroy^2)
+    perpx=normy*ppx-normz*ppy
+    perpy=-normx*ppx
+    perpz=normx*ppy
+    endelse
+    ;get the perp vectors
+;print,perpx,perpy,perpz
+    ;Make sure its a unit vector
+    perpt=sqrt(perpx^2+perpy^2+perpz^2)
+    perpx=perpx/perpt
+    perpy=perpy/perpt
+    perpz=perpz/perpt    """
+	
+	return(perpx,perpy,perpz)
 
 ###############################################################################
 def prepostIndex(ro,avecyl):
