@@ -799,6 +799,11 @@ def shockPerpDir3D(ro,vx,vy,vz,bx,by,bz,normx,normy,normz,avecyl,col,row,zrow):
 		perpx=ppgradrox[avecyl,avecyl]/(ppgradrox[avecyl,avecyl]+ppgradroy[avecyl,avecyl])
 		perpy=ppgradroy[avecyl,avecyl]/(ppgradrox[avecyl,avecyl]+ppgradroy[avecyl,avecyl])
 	
+	perplinex=perpx*np.linspace(-avecyl,avecyl,avecyl*2+1)
+	perpliney=perpy*np.linspace(-avecyl,avecyl,avecyl*2+1)
+	
+	NEED B AND V ALLIGNED WITH THE PLANE
+	
 	INTERPOLATE THE VALUES ALONG THE DIRECTION
 	stop
 	"""#get the gradient of all variables along the plane
