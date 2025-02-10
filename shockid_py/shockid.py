@@ -1125,6 +1125,8 @@ def shockLine(loc,ds,avecyl=5,ndim=2,getEnergy=False):
 	lineData['vsa']=vsa
 	lineData['speeds']=speeds
 	lineData['normarr']=normarr
+	lineData['ipre']=ipre
+	lineData['ipos']=ipos
 	
 	if getEnergies:
 	    ke=0.5*normarr['ro']*(normarr['vpar']**2+normarr['vperp']**2)
