@@ -1065,7 +1065,7 @@ def shockFilter(shocks,maxDis):
 	return(shocks2)
 
 ###############################################################################
-def shockLine(loc,ds,avecyl=5,ndim=2):
+def shockLine(loc,ds,avecyl=5,ndim=2,getEnergy=False):
 	col=loc[0]
 	row=loc[1]
 	zrow=0
@@ -1125,5 +1125,14 @@ def shockLine(loc,ds,avecyl=5,ndim=2):
 	lineData['vsa']=vsa
 	lineData['speeds']=speeds
 	lineData['normarr']=normarr
+	
+	if getEnergies:
+	    ke=0.5*normarr['ro']*(normarr['vpar']**2+normarr['vperp']**2)
+	    me=0.5*(normarr['bpar']**2+normarr['bperp']**2)
+	    te=normarr['pr']/(5.0/3.0-1.0)
+	    lineData['ke']=ke
+	    lineData['me']=me
+	    lineData['te']=te    
+    
 	
 	return(lineData)
