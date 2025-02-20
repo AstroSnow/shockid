@@ -1134,8 +1134,8 @@ def shockLine(loc,ds,avecyl=5,ndim=2,rad=False,getPoints=False,getEnergy=False):
 	if getPoints:
 		normlinex=lineData['normarr']['normx']*np.linspace(-5,5,5*2+1)
 		normliney=lineData['normarr']['normy']*np.linspace(-5,5,5*2+1)  
-		lineData['normlinex']=normlinex
-		lineData['normliney']=normliney
+		lineData['normlinex']=normlinex+col
+		lineData['normliney']=normliney+row
     
 	if getEnergy:
 	    ke=0.5*normarr['ro']*(normarr['vpar']**2+normarr['vperp']**2)
