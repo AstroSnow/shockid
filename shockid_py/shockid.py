@@ -387,7 +387,7 @@ def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 		ds['vz'][margin-1:egz-margin-1,margin:egy-margin,margin:egx-margin])/(2.0*dz)
 	return(divv)
 ################################################################
-def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=False):
+def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=False,rad=False):
 	#Step ii: find shock normal based on density gradient
 	if ndim == 2:
 	    normx=gradx[col,row]/gradmag[col,row]
@@ -465,6 +465,9 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 			bznorm=var['bz']
 			if np.size(var['bz']) >1:
 				bznorm=shocknormvals(var['bz'],tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)
+			if rad==True:
+				rl=shocknormvals(var['edref_m'],tempx,tempy,tempx2,tempy2,2,normx,normy,avecyl)
+				normvals['rl']=rl
 			normvals['bz']=bznorm
 			normvals['normx']=normx
 			normvals['normy']=normy
@@ -802,9 +805,9 @@ def shockPerpDir3D(ro,vx,vy,vz,bx,by,bz,normx,normy,normz,avecyl,col,row,zrow):
 	perplinex=perpx*np.linspace(-avecyl,avecyl,avecyl*2+1)
 	perpliney=perpy*np.linspace(-avecyl,avecyl,avecyl*2+1)
 	
-	NEED B AND V ALLIGNED WITH THE PLANE
+	print('NEED B AND V ALLIGNED WITH THE PLANE')
 	
-	INTERPOLATE THE VALUES ALONG THE DIRECTION
+	print('INTERPOLATE THE VALUES ALONG THE DIRECTION')
 	stop
 	"""#get the gradient of all variables along the plane
 	ppgrox=max([ppro(2,1)-ppro(0,1),$
@@ -1065,7 +1068,7 @@ def shockFilter(shocks,maxDis):
 	return(shocks2)
 
 ###############################################################################
-def shockLine(loc,ds,avecyl=5,ndim=2,getEnergy=False):
+def shockLine(loc,ds,avecyl=5,ndim=2,rad=False,getPoints=False,getEnergy=False):
 	col=loc[0]
 	row=loc[1]
 	zrow=0
@@ -1114,7 +1117,7 @@ def shockLine(loc,ds,avecyl=5,ndim=2,getEnergy=False):
 	gradmag=np.sqrt(gradrox**2+gradroy**2+gradroz**2)
 	
 	#Get the properties along the shock
-	normarr=getNormVals(col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
+	normarr=getNormVals(col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False,rad=rad)
 	#get indecies of pre and post shock states
 	[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
 #		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
@@ -1128,6 +1131,12 @@ def shockLine(loc,ds,avecyl=5,ndim=2,getEnergy=False):
 	lineData['ipre']=ipre
 	lineData['ipos']=ipos
 	
+	if getPoints:
+		normlinex=lineData['normarr']['normx']*np.linspace(-5,5,5*2+1)
+		normliney=lineData['normarr']['normy']*np.linspace(-5,5,5*2+1)  
+		lineData['normlinex']=normlinex
+		lineData['normliney']=normliney
+    
 	if getEnergy:
 	    ke=0.5*normarr['ro']*(normarr['vpar']**2+normarr['vperp']**2)
 	    me=0.5*(normarr['bpar']**2+normarr['bperp']**2)
