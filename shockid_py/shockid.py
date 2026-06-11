@@ -629,7 +629,7 @@ def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
 		#print(zrow[i],col[i],row[i])
 		#stop
 		center = len(ronorm) // 2
-		if abs(b - center) <= 2:
+		if abs(b - center) <= 1.1:
 			#print(row[i],col[i],zrow[i])
 			row2.append(row[i])#=[row2,row[i]]
 			col2.append(col[i])#=[col2,col[i]]
