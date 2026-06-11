@@ -9,20 +9,21 @@ import numpy as np
 import h5py as h5
 import matplotlib.pyplot as plt
 from shockid import shockid
+from scipy.ndimage import gaussian_filter
 
 gamma=5.0/3.0
 
-nx=100
-ny=100
-nz=100
-
-dx=1.0/nx
-dy=1.0/ny
-dz=1.0/nz
+nx=10
+ny=20
+nz=15
 
 xg=np.linspace(0,1,nx)
+dx=xg[1]-xg[0]
 yg=np.linspace(0,1,ny)
+dy=yg[1]-yg[0]
 zg=np.linspace(0,1,nz)
+dz=zg[1]-zg[0]
+
 
 ro=np.zeros((nz,ny,nx))
 vx=np.zeros((nz,ny,nx))
@@ -49,27 +50,38 @@ for i in range(0,nx):
 				pr[k,j,i]=(1.0+gamma*M*M*(1.0-1.0/r))
 
 
-margin=2
+#Smooth the interface
+#ro=gaussian_filter(ro, sigma=0.1)
+#vx=gaussian_filter(vx, sigma=0.1)
+#pr=gaussian_filter(pr, sigma=0.1)
+"""margin=2
 divv=np.zeros((nz,ny,nx))
-divv[margin:nz-margin,margin:ny-margin,margin:nx-margin]=(vy[margin:nz-margin,margin+1:ny-margin+1,margin:nx-margin]-\
+divv[...] = (
+    (vx[...,margin+1:nx-margin+1] - vx[...,margin-1:nx-margin-1])/(2*dx)
+    +(vy[:,margin+1:ny-margin+1,...] - vy[:,margin-1:ny-margin-1,...])/(2*dy)
+    +(vz[margin+1:nz-margin+1,...] - vz[margin-1:nz-margin-1,...])/(2*dz)
+)
+"""
+"""divv[margin:nz-margin,margin:ny-margin,margin:nx-margin]=(vy[margin:nz-margin,margin+1:ny-margin+1,margin:nx-margin]-\
 vy[margin:nz-margin,margin-1:ny-margin-1,margin:nx-margin])/(2.0*dy) \
    +(vx[margin:nz-margin,margin:ny-margin,margin+1:nx-margin+1]-\
 vx[margin:nz-margin,margin:ny-margin,margin-1:nx-margin-1])/(2.0*dz) \
    +(vz[margin+1:nz-margin+1,margin:ny-margin,margin:nx-margin]-\
 vz[margin-1:nz-margin-1,margin:ny-margin,margin:nx-margin])/(2.0*dx)
+"""
 
-gradrox=np.gradient(ro,axis=2)
-gradroy=np.gradient(ro,axis=1)
-gradroz=np.gradient(ro,axis=0)
+#gradrox=np.gradient(ro,axis=2)
+#gradroy=np.gradient(ro,axis=1)
+#gradroz=np.gradient(ro,axis=0)
 
 xs=0
-xe=-1
+xe=None
 ys=0
-ye=-1
+ye=None
 zs=0
-ze=-1
+ze=None
 
 shocks=shockid(xg[xs:xe],yg[ys:ye],zg[zs:ze],ro[zs:ze,ys:ye,xs:xe],
 			   vx[zs:ze,ys:ye,xs:xe],vy[zs:ze,ys:ye,xs:xe],vz[zs:ze,ys:ye,xs:xe],
 			   bx[zs:ze,ys:ye,xs:xe],by[zs:ze,ys:ye,xs:xe],bz[zs:ze,ys:ye,xs:xe],
-			   pr[zs:ze,ys:ye,xs:xe],ndim=3,smthfac=0,nproc=1,convl=0.000,avecyl=5)
+			   pr[zs:ze,ys:ye,xs:xe],ndim=3,smthfac=0,nproc=1,convl=0.000,avecyl=2)
