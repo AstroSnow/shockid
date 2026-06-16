@@ -140,9 +140,9 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		if ndim == 3:
 			zrow=zrow2
 	"""		
-	print(np.unique(zrow))
-	print(np.unique(col))
-	print(np.unique(row))
+	#print(np.unique(zrow))
+	#print(np.unique(col))
+	#print(np.unique(row))
 	#Remove non-local maximun gradient
 	#print('Removing non-local maximum candidates')
 	time1=time.perf_counter()
@@ -152,7 +152,10 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		if ndim ==3:
 			[col,row,zrow]=removeNonMax(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2)
 	if nproc > 1:
-		[col,row]=removeNonMaxPar(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2,nproc)
+		if ndim ==2:
+			[col,row]=removeNonMaxPar(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2,nproc)
+		if ndim ==3:
+			[col,row,zrow]=removeNonMaxPar(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,3,nproc)
 	time2=time.perf_counter()
 	
 	#print(np.unique(zrow))
@@ -212,7 +215,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 			vfastpos =np.abs(vfpos/np.sqrt(speeds['vfast2'][ipos]))
 			posstate=getState(vslowpos,valfpos,vfastpos)
 		
-			#print(col[i],row[i],zrow[i],vfpre,prestate,vfpos,posstate,vsa)
+			#print(col[i],row[i],zrow[i],vfpre,vfpos,prestate,posstate,vsa)
 			#Get the transitions
 			if (prestate == 1) and (posstate==2):
 				#Fast shocks
@@ -654,7 +657,7 @@ def removeNonMaxPar(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,n
 
 #	col2=[]
 #	row2=[]
-	zrow2=[]
+#	zrow2=[]
 
 #	solarr=np.zeros((np.size(col),nproc))	
 	
@@ -685,11 +688,15 @@ def removeNonMaxPar(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,n
 	#row=row2
 	#col=col2
 	if ndim==3:
-		zrow=zrow2
+		zrow=zrow[np.argwhere(sol == 1)]
 	#print(np.size(row),np.size(col))	
 	#print(row.reshape(np.size(row)))
 	#stop
-	return(col.reshape(np.size(row)),row.reshape(np.size(row)))
+	if ndim==2:		
+		return(col.reshape(np.size(row)),row.reshape(np.size(row)))
+	if ndim==3:		
+		return(col.reshape(np.size(row)),row.reshape(np.size(row)),zrow.reshape(np.size(row)))    
+#return(col.reshape(np.size(row)),row.reshape(np.size(row)))
 
 ###############################################################################
 def removeNonMaxParLoop(istart,iend,col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
@@ -1036,7 +1043,7 @@ def prepostIndex(ro,avecyl):
 ###############################################################################
 def getShockFrame(ropos,ropre,vperppos,vperppre,vparpos,vparpre,bparpos,bparpre,bperppos,bperppre):
 	#Just assuming mass conservation. There are better ways to do this.
-    if (ropre-ropos) <= 1.0e-10:
+    if np.abs(ropre-ropos) <= 1.0e-10:
         vsa=0.0
     else:
 	    vsa=(ropos*vperppos-ropre*vperppre)/(ropre-ropos)
@@ -1050,6 +1057,9 @@ def getWaveSpeeds(ro,pr,bx,by,bz,bperp,ang):
 	va2=(bx**2+by**2)/ro
 	if np.size(bz) > 1:
 		va2=(bx**2+by**2+bz**2)/ro
+	if (np.max(bx**2+by**2+bz**2) <1.0e-10):
+		bperp=0
+		va2=0
 	vap2=bperp**2/ro
 	vslow2=0.5*(cs2+va2-np.sqrt((cs2+va2)**2 - 4.0*va2*cs2*(np.cos(ang))**2))
 	vfast2=0.5*(cs2+va2+np.sqrt((cs2+va2)**2 - 4.0*va2*cs2*(np.cos(ang))**2))
@@ -1232,6 +1242,9 @@ def shockLine(loc,ds,avecyl=5,ndim=2,rad=False,getPoints=False,getEnergy=False):
 	egy=np.size(ds['ygrid'])-1
 	egz=0.0
 	if (ndim == 3):
+		col=loc[1]
+		row=loc[0]
+		zrow=loc[2]
 		egz=np.size(ds['zgrid'])-1
 
 	#Define the grid
@@ -1294,3 +1307,8 @@ def shockLine(loc,ds,avecyl=5,ndim=2,rad=False,getPoints=False,getEnergy=False):
     
 	
 	return(lineData)
+
+#Quick script to swap the ordering
+def xyzTozyx(arr):
+    arr_zyx = np.transpose(arr, (2, 1, 0))
+    return arr_zyx
