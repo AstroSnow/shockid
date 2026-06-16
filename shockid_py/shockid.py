@@ -301,12 +301,20 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl):
 	#Loop for identifying shocks for use in parallel
 	shocks={}
-	fast=[0,0]
-	slow=[0,0]
-	int1=[0,0]
-	int2=[0,0]
-	int3=[0,0]
-	int4=[0,0]
+	if ndim==3:
+		fast=[0,0,0]
+		slow=[0,0,0]
+		int1=[0,0,0]
+		int2=[0,0,0]
+		int3=[0,0,0]
+		int4=[0,0,0]
+	else:
+		fast=[0,0]
+		slow=[0,0]
+		int1=[0,0]
+		int2=[0,0]
+		int3=[0,0]
+		int4=[0,0]
 	
 	#arrays for storing mach numbers
 	slowmach=[0,0]
@@ -318,7 +326,11 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 	for i in range(int(istart),int(iend)+1):
 		#print(i)
 		#Calcuate data along the LOS
-		normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
+		if ndim ==2:
+			normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
+		if ndim ==3:
+			normarr=getNormVals(col[i],row[i],zrow[i],ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
+		#normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
 		#get indecies of pre and post shock states
 		[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
 #		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
@@ -343,6 +355,40 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 		#Get the transitions
 		if (prestate == 1) and (posstate==2):
 			#Fast shocks
+			if ndim==3:
+				fast=np.vstack((fast,[zrow[i],col[i],row[i]]))
+			else:
+				fast=np.vstack((fast,[col[i],row[i]]))
+			#print('fast shock')
+		if (prestate == 3) and (posstate==4):
+			#Slow shocks
+			if ndim==3:
+				slow=np.vstack((slow,[zrow[i],col[i],row[i]]))
+			else:
+				slow=np.vstack((slow,[col[i],row[i]]))
+		if (prestate == 1) and (posstate==3):
+			if ndim==3:
+				int1=np.vstack((int1,[zrow[i],col[i],row[i]]))
+			else:
+				int1=np.vstack((int1,[col[i],row[i]]))
+		if (prestate == 1) and (posstate==4):
+			if ndim==3:
+				int2=np.vstack((int2,[zrow[i],col[i],row[i]]))
+			else:
+				int2=np.vstack((int2,[col[i],row[i]]))
+		if (prestate == 2) and (posstate==3):
+			if ndim==3:
+				int3=np.vstack((int3,[zrow[i],col[i],row[i]]))
+			else:
+				int3=np.vstack((int3,[col[i],row[i]]))
+		if (prestate == 2) and (posstate==4):
+			if ndim==3:
+				int4=np.vstack((int4,[zrow[i],col[i],row[i]]))
+			else:
+				int4=np.vstack((int4,[col[i],row[i]]))
+                
+		"""if (prestate == 1) and (posstate==2):
+			#Fast shocks
 			fast=np.vstack((fast,[col[i],row[i]]))
 			fastmach=np.vstack((fastmach,[valfpre,valfpos]))
 			#print('fast shock')
@@ -361,7 +407,7 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 			int3mach=np.vstack((int3mach,[valfpre,valfpos]))
 		if (prestate == 2) and (posstate==4):
 			int4=np.vstack((int4,[col[i],row[i]]))
-			int4mach=np.vstack((int4mach,[valfpre,valfpos]))
+			int4mach=np.vstack((int4mach,[valfpre,valfpos]))"""
 			
 	shocks['slow']=slow
 	shocks['fast']=fast
@@ -450,6 +496,9 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 	    normx=gradx[col,row]/gradmag[col,row]
 	    normy=grady[col,row]/gradmag[col,row]
 	if ndim == 3:
+		#print(zrow)
+		#print(row)
+		#print(col)
 		if gradmag[zrow,col,row] <= 1.0e-16:
 		    normx=0
 		    normy=0
@@ -706,7 +755,10 @@ def removeNonMaxParLoop(istart,iend,col,row,zrow,ro,gradx,grady,gradz,gradmag,di
 #	print(istart,iend)
 	for i in range(int(istart),int(iend)+1):
 #		print(i)
-		ronorm=getNormVals(col[i],row[i],zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,True)
+		if (ndim ==2):
+			ronorm=getNormVals(col[i],row[i],zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,True)
+		if (ndim ==3):
+			ronorm=getNormVals(col[i],row[i],zrow[i],ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,True)
 		b=np.argmax(np.abs(np.gradient(ronorm)))
 #		if strat eq 1 then a=max(abs(deriv(ronorm-mrotemp)),b)
 #print(np.gradient(ronorm))
