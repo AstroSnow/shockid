@@ -200,7 +200,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 			#vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
 			vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
 						normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
-			speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'], normarr['ang'])
+			speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'],)
 			#Put velocity in shock frame
 			vfpos=normarr['vperp'][ipos]+vsa
 			vfpre=normarr['vperp'][ipre]+vsa
@@ -336,7 +336,7 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 #		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
 		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
 					normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
-		speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'], normarr['ang'])
+		speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'])
 		#Put velocity in shock frame
 		vfpos=normarr['vperp'][ipos]+vsa
 		vfpre=normarr['vperp'][ipre]+vsa
@@ -636,22 +636,17 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 			#normvals['bpar']=bpar
 			#normvals['vpar']=vpar
             
-			perpz, perpy, perpx = shockPerpDir3D_new(var['vx'],var['vy'],var['vz'],
-                                                                                normx,normy,normz,
-                                                                                col,row,zrow)
+			#perpz, perpy, perpx = shockPerpDir3D_new(var['vx'],var['vy'],var['vz'],
+            #                                                                    normx,normy,normz,
+            #                                                                    col,row,zrow)
 			#print(perpx,perpy,perpz)
 			#print(normvals['vperp'])
             
-			normvals['vpar'] = normvals['vx']*perpx + normvals['vy']*perpy + normvals['vz']*perpz
-			normvals['bpar'] = normvals['bx']*perpx + normvals['by']*perpy + normvals['bz']*perpz
-			
-			normvals['ang']=np.arctan2(normvals['bpar'], normvals['bperp'])#np.arctan(normvals['bpar']/normvals['bperp']) 
-			#stop
-			
-			#normvals['perpx']=(-normy/normx)/np.sqrt(normy**2/normx**2+1.0)
-			#normvals['perpy']=1.0/np.sqrt(normy**2/normx**2+1.0)
-			#normvals['bpar']=normvals['perpx']*normvals['bx']+normvals['perpy']*normvals['by']
-			#normvals['vpar']=normvals['perpx']*normvals['vx']+normvals['perpy']*normvals['vy']
+			b2 = normvals['bx']**2 + normvals['by']**2 + normvals['bz']**2
+            v2 = normvals['vx']**2 + normvals['vy']**2 + normvals['vz']**2
+            normvals['bpar'] = np.sqrt(np.maximum(b2 - normvals['bperp']**2, 0.0))   # |B_t|
+            normvals['vpar'] = np.sqrt(np.maximum(v2 - normvals['vperp']**2, 0.0))   # |v_t|
+            normvals['ang']  = np.arctan2(normvals['bpar'], np.abs(normvals['bperp']))
 			return(normvals)
 	
 ################################################################
@@ -1104,20 +1099,26 @@ def getShockFrame(ropos,ropre,vperppos,vperppre,vparpos,vparpre,bparpos,bparpre,
     return(vsa)
 
 ###############################################################################
-def getWaveSpeeds(ro,pr,bx,by,bz,bperp,ang):
-	cs2=5.0/3.0*pr/ro
-	va2=(bx**2+by**2)/ro
-	if np.size(bz) > 1:
-		va2=(bx**2+by**2+bz**2)/ro
-	if (np.max(bx**2+by**2+bz**2) <1.0e-10):
-		bperp=0
-		va2=0
-	vap2=bperp**2/ro
-	vslow2=0.5*(cs2+va2-np.sqrt((cs2+va2)**2 - 4.0*va2*cs2*(np.cos(ang))**2))
-	vfast2=0.5*(cs2+va2+np.sqrt((cs2+va2)**2 - 4.0*va2*cs2*(np.cos(ang))**2))
-	#print(cs2,va2,ang,vslow2,vfast2)
-	speeds={'cs2':cs2,'va2':va2,'vap2':vap2,'vslow2':vslow2,'vfast2':vfast2}
-	return(speeds)
+def getWaveSpeeds(ro, pr, bx, by, bz, bperp, gamma=5.0/3.0):
+    """Phase speeds squared of the slow/Alfven/fast waves along the shock normal.
+
+    bperp : component of B along the shock normal (signed or unsigned)
+    bz    : may be a scalar 0 in 2D runs without a z-component
+    """
+    b2   = bx**2 + by**2 + bz**2                 # full |B|^2, including bz
+    cs2  = gamma*pr/ro
+    va2  = b2/ro
+    vap2 = bperp**2/ro                           # Alfven speed along n
+
+    # cos^2(theta_Bn) = Bn^2/|B|^2 ; no tangential direction needed
+    b2 = np.broadcast_to(b2, np.shape(ro))
+    cos2 = np.divide(np.broadcast_to(bperp, np.shape(ro))**2, b2,
+                     out=np.ones(np.shape(ro)), where=b2 > 1e-30)
+
+    disc = np.sqrt(np.maximum((cs2+va2)**2 - 4.0*va2*cs2*cos2, 0.0))
+    return {'cs2': cs2, 'va2': va2, 'vap2': vap2,
+            'vslow2': 0.5*(cs2+va2-disc),
+            'vfast2': 0.5*(cs2+va2+disc)}
 	
 ###############################################################################
 def getState(vslow,valp,vfast):
@@ -1335,7 +1336,7 @@ def shockLine(loc,ds,avecyl=5,ndim=2,rad=False,getPoints=False,getEnergy=False):
 #		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
 	vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
 				normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
-	speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'], normarr['ang'])
+	speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'])
 	lineData={}
 	lineData['vsa']=vsa
 	lineData['speeds']=speeds
