@@ -643,10 +643,10 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 			#print(normvals['vperp'])
             
 			b2 = normvals['bx']**2 + normvals['by']**2 + normvals['bz']**2
-            v2 = normvals['vx']**2 + normvals['vy']**2 + normvals['vz']**2
-            normvals['bpar'] = np.sqrt(np.maximum(b2 - normvals['bperp']**2, 0.0))   # |B_t|
-            normvals['vpar'] = np.sqrt(np.maximum(v2 - normvals['vperp']**2, 0.0))   # |v_t|
-            normvals['ang']  = np.arctan2(normvals['bpar'], np.abs(normvals['bperp']))
+			v2 = normvals['vx']**2 + normvals['vy']**2 + normvals['vz']**2
+			normvals['bpar'] = np.sqrt(np.maximum(b2 - normvals['bperp']**2, 0.0))   # |B_t|
+			normvals['vpar'] = np.sqrt(np.maximum(v2 - normvals['vperp']**2, 0.0))   # |v_t|
+			normvals['ang']  = np.arctan2(normvals['bpar'], np.abs(normvals['bperp']))
 			return(normvals)
 	
 ################################################################
