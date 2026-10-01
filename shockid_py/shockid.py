@@ -1080,17 +1080,17 @@ def shockPerpDir3D_new(vx, vy, vz,
 	return(perpx,perpy,perpz)"""
 
 ###############################################################################
-def prepostIndex(ro,avecyl):
-	if ro[0] < ro[2*avecyl]: 
-		ipre=np.argmin(ro[0:avecyl-1])
-		ipos=np.argmax(ro[avecyl+1:avecyl*2])
-		ipos=ipos+avecyl+1
-	else:
-		ipos=np.argmax(ro[0:avecyl-1])
-		ipre=np.argmin(ro[avecyl+1:avecyl*2])
-		ipre=ipre+avecyl+1
-		
-	return(ipre,ipos)
+def prepostIndex(ro, avecyl, off=None):
+    """Indices of the pre- and post-shock samples along the normal profile.
+
+    ro     : density sampled along the normal, length 2*avecyl+1, centre = avecyl
+    off    : distance in samples from the centre (default avecyl, i.e. the window ends)
+    """
+    off = avecyl if off is None else off
+    lo, hi = avecyl - off, avecyl + off       # symmetric about the front
+    if ro[lo] < ro[hi]:
+        return lo, hi                         # (ipre, ipos): density rises along n
+    return hi, lo                             # profile reversed: swap
 
 ###############################################################################
 def getShockFrame(ropos,ropre,vperppos,vperppre,vparpos,vparpre,bparpos,bparpre,bperppos,bperppre):
