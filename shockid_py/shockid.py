@@ -155,7 +155,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		if ndim ==2:
 			[col,row]=removeNonMaxPar(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2,nproc)
 		if ndim ==3:
-			[col,row,zrow]=removeNonMaxPar(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,3,nproc)
+			[col,row,zrow]=removeNonMaxPar(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2,nproc)
 	time2=time.perf_counter()
 	
 	#print(np.unique(zrow))
@@ -195,25 +195,29 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 				normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
 			if ndim ==3:
 				normarr=getNormVals(col[i],row[i],zrow[i],ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
-			#get indecies of pre and post shock states
-			[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
-			#vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
-			vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
-						normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
-			speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'],)
-			#Put velocity in shock frame
-			vfpos=normarr['vperp'][ipos]+vsa
-			vfpre=normarr['vperp'][ipre]+vsa
-			
-			vslowpre =np.abs(vfpre/np.sqrt(speeds['vslow2'][ipre]))
-			valfpre  =np.abs(vfpre/np.sqrt(speeds['vap2'][ipre]))
-			vfastpre =np.abs(vfpre/np.sqrt(speeds['vfast2'][ipre]))
-			prestate=getState(vslowpre,valfpre,vfastpre)
-			
-			vslowpos =np.abs(vfpos/np.sqrt(speeds['vslow2'][ipos]))
-			valfpos  =np.abs(vfpos/np.sqrt(speeds['vap2'][ipos]))
-			vfastpos =np.abs(vfpos/np.sqrt(speeds['vfast2'][ipos]))
-			posstate=getState(vslowpos,valfpos,vfastpos)
+#			#get indecies of pre and post shock states
+#			[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
+#			#vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
+#			vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
+#						normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
+#			speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'],)
+#			#Put velocity in shock frame
+#			vfpos=normarr['vperp'][ipos]+vsa
+#			vfpre=normarr['vperp'][ipre]+vsa
+#			
+#			vslowpre =np.abs(vfpre/np.sqrt(speeds['vslow2'][ipre]))
+#			valfpre  =np.abs(vfpre/np.sqrt(speeds['vap2'][ipre]))
+#			vfastpre =np.abs(vfpre/np.sqrt(speeds['vfast2'][ipre]))
+#			prestate=getState(vslowpre,valfpre,vfastpre)
+#			
+#			vslowpos =np.abs(vfpos/np.sqrt(speeds['vslow2'][ipos]))
+#			valfpos  =np.abs(vfpos/np.sqrt(speeds['vap2'][ipos]))
+#			vfastpos =np.abs(vfpos/np.sqrt(speeds['vfast2'][ipos]))
+#			posstate=getState(vslowpos,valfpos,vfastpos)
+			res = classifyShock(normarr, avecyl, tol=shocktol)
+			if res is None:
+			    continue
+			prestate, posstate, vsa, mpre, mpos = res
 		
 			#print(col[i],row[i],zrow[i],vfpre,vfpos,prestate,posstate,vsa)
 			#Get the transitions
@@ -274,7 +278,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		print(pitrange[:,0],pitrange[:,1])
 		print('Each processor doing ',int(pitrange[1,0]-pitrange[0,0]),' elements')
 		#sol=shockClassLoop(pitrange[0,0],pitrange[0,1],col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl)
-		sol=pool.starmap(shockClassLoop,[(pitrange[j,0],pitrange[j,1],col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl) for j in range(0,nproc)])
+		sol=pool.starmap(shockClassLoop,[(pitrange[j,0],pitrange[j,1],col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,0.05) for j in range(0,nproc)])
 		pool.close()
 		pool.join()
 		#NEED TO REJOIN EVERYTHING
@@ -298,7 +302,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	print('Finding shocks took ',time2-time1,' on ',nproc,' cores')
 	return(shocks)
 ###############################################################################
-def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl):
+"""def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,tol=0.05):
 	#Loop for identifying shocks for use in parallel
 	shocks={}
 	if ndim==3:
@@ -331,25 +335,29 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 		if ndim ==3:
 			normarr=getNormVals(col[i],row[i],zrow[i],ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
 		#normarr=getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,gcalc=False)
-		#get indecies of pre and post shock states
-		[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
+#		#get indecies of pre and post shock states
+#		[ipre,ipos]=prepostIndex(normarr['ro'],avecyl)
 #		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre])
-		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
-					normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
-		speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'])
-		#Put velocity in shock frame
-		vfpos=normarr['vperp'][ipos]+vsa
-		vfpre=normarr['vperp'][ipre]+vsa
-		
-		vslowpre =np.abs(vfpre/np.sqrt(speeds['vslow2'][ipre]))
-		valfpre  =np.abs(vfpre/np.sqrt(speeds['vap2'][ipre]))
-		vfastpre =np.abs(vfpre/np.sqrt(speeds['vfast2'][ipre]))
-		prestate=getState(vslowpre,valfpre,vfastpre)
-		
-		vslowpos =np.abs(vfpos/np.sqrt(speeds['vslow2'][ipos]))
-		valfpos  =np.abs(vfpos/np.sqrt(speeds['vap2'][ipos]))
-		vfastpos =np.abs(vfpos/np.sqrt(speeds['vfast2'][ipos]))
-		posstate=getState(vslowpos,valfpos,vfastpos)
+#		vsa=getShockFrame(normarr['ro'][ipos],normarr['ro'][ipre],normarr['vperp'][ipos],normarr['vperp'][ipre],
+#					normarr['vpar'][ipos],normarr['vpar'][ipre],normarr['bpar'][ipos],normarr['bpar'][ipre],normarr['bperp'][ipos],normarr['bperp'][ipre])
+#		speeds=getWaveSpeeds(normarr['ro'],normarr['pr'],normarr['bx'],normarr['by'],normarr['bz'],normarr['bperp'])
+#		#Put velocity in shock frame
+#		vfpos=normarr['vperp'][ipos]+vsa
+#		vfpre=normarr['vperp'][ipre]+vsa
+#		
+#		vslowpre =np.abs(vfpre/np.sqrt(speeds['vslow2'][ipre]))
+#		valfpre  =np.abs(vfpre/np.sqrt(speeds['vap2'][ipre]))
+#		vfastpre =np.abs(vfpre/np.sqrt(speeds['vfast2'][ipre]))
+#		prestate=getState(vslowpre,valfpre,vfastpre)
+#		
+#		vslowpos =np.abs(vfpos/np.sqrt(speeds['vslow2'][ipos]))
+#		valfpos  =np.abs(vfpos/np.sqrt(speeds['vap2'][ipos]))
+#		vfastpos =np.abs(vfpos/np.sqrt(speeds['vfast2'][ipos]))
+#		posstate=getState(vslowpos,valfpos,vfastpos)
+		res = classifyShock(normarr, avecyl, tol=tol)
+		if res is None:
+		    continue
+		prestate, posstate, vsa, mpre, mpos = res
 	
 		#print(col[i],row[i])
 		#Get the transitions
@@ -387,27 +395,6 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 			else:
 				int4=np.vstack((int4,[col[i],row[i]]))
                 
-		"""if (prestate == 1) and (posstate==2):
-			#Fast shocks
-			fast=np.vstack((fast,[col[i],row[i]]))
-			fastmach=np.vstack((fastmach,[valfpre,valfpos]))
-			#print('fast shock')
-		if (prestate == 3) and (posstate==4):
-			#Fast shocks
-			slow=np.vstack((slow,[col[i],row[i]]))
-			slowmach=np.vstack((slowmach,[valfpre,valfpos]))
-		if (prestate == 1) and (posstate==3):
-			int1=np.vstack((int1,[col[i],row[i]]))
-			int1mach=np.vstack((int1mach,[valfpre,valfpos]))
-		if (prestate == 1) and (posstate==4):
-			int2=np.vstack((int2,[col[i],row[i]]))
-			int2mach=np.vstack((int2mach,[valfpre,valfpos]))
-		if (prestate == 2) and (posstate==3):
-			int3=np.vstack((int3,[col[i],row[i]]))
-			int3mach=np.vstack((int3mach,[valfpre,valfpos]))
-		if (prestate == 2) and (posstate==4):
-			int4=np.vstack((int4,[col[i],row[i]]))
-			int4mach=np.vstack((int4mach,[valfpre,valfpos]))"""
 			
 	shocks['slow']=slow
 	shocks['fast']=fast
@@ -423,8 +410,61 @@ def shockClassLoop(istart,iend,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,d
 	shocks['int3mach']=int3mach
 	shocks['int4mach']=int4mach
 	return(shocks)
+"""
+TRANS = {(1,2):'fast', (3,4):'slow', (1,3):'int1',
+         (1,4):'int2', (2,3):'int3', (2,4):'int4'}
 
+def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
+                   gradmag, divv, ndim, avecyl, tol=0.05):
+    hits = {k: [] for k in TRANS.values()}
+    mach = {k: [] for k in TRANS.values()}
+    for i in range(int(istart), int(iend)+1):
+        if ndim == 2:
+            normarr = getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,
+                                  gradmag,divv,ndim,avecyl,gcalc=False)
+            loc = [col[i], row[i]]
+        else:
+            normarr = getNormVals(col[i],row[i],zrow[i],ds,gradrox,gradroy,gradroz,
+                                  gradmag,divv,ndim,avecyl,gcalc=False)
+            loc = [zrow[i], col[i], row[i]]
+        res = classifyShock(normarr, avecyl, tol=tol)
+        if res is None:
+            continue
+        pre, pos, vsa, mpre, mpos = res
+        key = TRANS.get((pre, pos))
+        if key is not None:
+            hits[key].append(loc)
+            mach[key].append(list(mpre) + list(mpos))
+    shocks = {}
+    for k in hits:
+        shocks[k] = np.array(hits[k], dtype=int).reshape(-1, ndim)
+        shocks[k+'mach'] = np.array(mach[k], dtype=float).reshape(-1, 6)
+    return shocks
 #####################################################################################################
+def classifyShock(normarr, avecyl, off=None, tol=0.05):
+    """Returns (prestate, posstate, vsa, premach, posmach), or None if rejected."""
+    ipre, ipos = prepostIndex(normarr['ro'], avecyl, off)
+    vsa = getShockFrame(normarr['ro'][ipos], normarr['ro'][ipre],
+                        normarr['vperp'][ipos], normarr['vperp'][ipre])
+    if np.isnan(vsa):
+        return None
+    s = 1.0 if ipos > ipre else -1.0            # +1 if n points from pre to post
+    if s*(normarr['vperp'][ipre] + vsa) <= 0:   # fluid not crossing pre -> post
+        return None
+    speeds = getWaveSpeeds(normarr['ro'], normarr['pr'], normarr['bx'],
+                           normarr['by'], normarr['bz'], normarr['bperp'])
+    states, machs = [], []
+    with np.errstate(divide='ignore', invalid='ignore'):
+        for i in (ipre, ipos):
+            vf = np.abs(normarr['vperp'][i] + vsa)
+            m = (vf/np.sqrt(speeds['vslow2'][i]),
+                 vf/np.sqrt(speeds['vap2'][i]),
+                 vf/np.sqrt(speeds['vfast2'][i]))
+            machs.append(m)
+            states.append(getState(*m, tol=tol))
+    return states[0], states[1], vsa, machs[0], machs[1]
+######################################################################################################
+
 #Data smoothing routine
 def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
 	from scipy.ndimage import gaussian_filter
@@ -663,11 +703,11 @@ def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
 
 	for i in range(0,np.size(col)):
 		if ndim == 3:
-			ronorm=getNormVals(col[i],row[i],zrow[i],ro,gradx,grady,gradz,gradmag,divv,ndim,2,gcalc=True)
+			ronorm=getNormVals(col[i],row[i],zrow[i],ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=True)
 		if ndim == 2:
 			ronorm=getNormVals(col[i],row[i],zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=True)
 
-		b=np.argmax(np.abs(np.gradient(ronorm)))
+		#b=np.argmax(np.abs(np.gradient(ronorm)))
 #		if strat eq 1 then a=max(abs(deriv(ronorm-mrotemp)),b)
 		#print(ronorm)
 		#print(np.abs(np.gradient(ronorm)))
@@ -675,19 +715,21 @@ def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
 		#stop
 		#print(zrow[i],col[i],row[i])
 		#stop
-		center = len(ronorm) // 2
-		if abs(b - center) <= 1.1:
+		#center = len(ronorm) // 2
+		if isLocalMax(ronorm): #if abs(b - center) <= 1.1:
 			#print(row[i],col[i],zrow[i])
 			row2.append(row[i])#=[row2,row[i]]
 			col2.append(col[i])#=[col2,col[i]]
 			if ndim == 3:
 				zrow2.append(zrow[i])
 		
-	row=row2
-	col=col2
-	if ndim==3:
-		zrow=zrow2
-		
+	#row=row2
+	#col=col2
+	#if ndim==3:
+	#	zrow=zrow2
+	col = np.array(col2, dtype=int); row = np.array(row2, dtype=int)
+	if ndim == 3: zrow = np.array(zrow2, dtype=int)			
+	
 	if ndim==2:		
 		return(col,row)
 	if ndim==3:		
@@ -754,13 +796,18 @@ def removeNonMaxParLoop(istart,iend,col,row,zrow,ro,gradx,grady,gradz,gradmag,di
 			ronorm=getNormVals(col[i],row[i],zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,True)
 		if (ndim ==3):
 			ronorm=getNormVals(col[i],row[i],zrow[i],ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,True)
-		b=np.argmax(np.abs(np.gradient(ronorm)))
+		#b=np.argmax(np.abs(np.gradient(ronorm)))
 #		if strat eq 1 then a=max(abs(deriv(ronorm-mrotemp)),b)
 #print(np.gradient(ronorm))
-		if b == 2:
+		if isLocalMax(ronorm):   #if b == 2:
 			sol[i]=1
 	return(sol)
-
+###############################################################################
+def isLocalMax(ronorm, tol=1):
+    """True if the largest density gradient along the normal is within `tol`
+    samples of the centre of the window."""
+    b = np.argmax(np.abs(np.gradient(ronorm)))
+    return abs(b - len(ronorm)//2) <= tol
 ###############################################################################
 def shocknormvals(var,tempx,tempy,tempx2,tempy2,ndim,normx,normy,avecyl):
     #from scipy.interpolate import RegularGridInterpolator
@@ -1088,7 +1135,7 @@ def prepostIndex(ro, avecyl, off=None):
     return hi, lo                             # profile reversed: swap
 
 ###############################################################################
-def getShockFrame(ropos,ropre,vperppos,vperppre,vparpos,vparpre,bparpos,bparpre,bperppos,bperppre):
+"""def getShockFrame(ropos,ropre,vperppos,vperppre,vparpos,vparpre,bparpos,bparpre,bperppos,bperppre):
 	#Just assuming mass conservation. There are better ways to do this.
     if np.abs(ropre-ropos) <= 1.0e-10:
         vsa=0.0
@@ -1097,6 +1144,16 @@ def getShockFrame(ropos,ropre,vperppos,vperppre,vparpos,vparpre,bparpos,bparpre,
 	#Electric field
 #	vsa=(vperppos*bparpos-vperppre*bparpre-vparpos*bperppos+vparpre*bperppre)/(bparpos-bparpre)
     return(vsa)
+"""
+def getShockFrame(ropos, ropre, vperppos, vperppre,
+                  vparpos=None, vparpre=None, bparpos=None, bparpre=None,
+                  bperppos=None, bperppre=None, tol=1.0e-2):
+    """Shock-frame offset vsa = -Vs from mass conservation.
+    Returns NaN unless the post/pre density ratio exceeds 1+tol (no abs: expansions fail)."""
+    drho = ropos - ropre
+    if (not np.isfinite(drho)) or drho <= tol*ropre:
+        return np.nan
+    return -(ropos*vperppos - ropre*vperppre)/drho
 
 ###############################################################################
 def getWaveSpeeds(ro, pr, bx, by, bz, bperp, gamma=5.0/3.0):
@@ -1121,15 +1178,16 @@ def getWaveSpeeds(ro, pr, bx, by, bz, bperp, gamma=5.0/3.0):
             'vfast2': 0.5*(cs2+va2+disc)}
 	
 ###############################################################################
-def getState(vslow,valp,vfast):
-	state=4
-	if vfast >= 1:
-		state=1
-	if valp >=1 and vfast < 1:
-		state=2
-	if vslow >=1 and valp < 1:
-		state=3
-	return(state)
+def getState(vslow, valp, vfast, tol=0.0):
+    """1: M_fast>=1 | 2: M_alf>=1>M_fast | 3: M_slow>=1>M_alf | 4: all <1
+    0: marginal (any Mach number within tol of 1) or undefined (NaN)."""
+    m = np.array([vslow, valp, vfast], dtype=float)
+    if np.any(np.isnan(m)) or np.any(np.abs(m - 1.0) < tol):
+        return 0
+    if vfast >= 1: return 1
+    if valp  >= 1: return 2
+    if vslow >= 1: return 3
+    return 4
 
 ###############################################################################
 def restoreShocks(fname):
