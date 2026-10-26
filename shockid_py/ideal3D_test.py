@@ -47,7 +47,7 @@ for i in range(0,nx):
 			if xg[i] > 0.5:
 				ro[k,j,i]=r
 				vx[k,j,i]=M/r
-				pr[k,j,i]=(1.0+gamma*M*M*(1.0-1.0/r))
+				pr[k,j,i]=(1.0/gamma)*(1.0+gamma*M*M*(1.0-1.0/r))  # p2 = p1*(1+gamma M^2 (1-1/r)), p1=1/gamma
 
 
 #Smooth the interface

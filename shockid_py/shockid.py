@@ -180,18 +180,9 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		import multiprocessing as mp
 		pool=mp.get_context('fork').Pool(nproc)
 		print('using ',nproc,' cores')
-		pitrange=np.zeros((nproc,2))
-		st=int(0)
-		for i in range(0,nproc-1):
-			pitrange[i,0]=int(st)
-			pitrange[i,1]=int(st+np.floor(np.size(col)/nproc))
-			st=pitrange[i,1]+1
-		pitrange[nproc-1,0]=int(st)
-		pitrange[nproc-1,1]=int(np.size(col)-1)
-		print(pitrange[:,0],pitrange[:,1])
-		print('Each processor doing ',int(pitrange[1,0]-pitrange[0,0]),' elements')
-		#sol=shockClassLoop(pitrange[0,0],pitrange[0,1],col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl)
-		sol=pool.starmap(shockClassLoop,[(pitrange[j,0],pitrange[j,1],col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,0.05) for j in range(0,nproc)])
+		pitrange=chunkRanges(np.size(col),nproc)
+		print('Each processor doing ~',int(np.ceil(np.size(col)/nproc)),' elements')
+		sol=pool.starmap(shockClassLoop,[(a,b,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,shocktol) for a,b in pitrange])
 		pool.close()
 		pool.join()
 		#NEED TO REJOIN EVERYTHING
@@ -202,6 +193,14 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	
 	print('Finding shocks took ',time2-time1,' on ',nproc,' cores')
 	return(shocks)
+###############################################################################
+def chunkRanges(n, nproc):
+    """Inclusive (start, end) index pairs splitting range(n) over nproc workers.
+    Empty chunks come back as (0, -1) so the worker loop does nothing."""
+    out = []
+    for c in np.array_split(np.arange(n), nproc):
+        out.append((int(c[0]), int(c[-1])) if c.size else (0, -1))
+    return out
 ###############################################################################
 TRANS = {(1,2):'fast', (3,4):'slow', (1,3):'int1',
          (1,4):'int2', (2,3):'int3', (2,4):'int4'}
@@ -291,10 +290,11 @@ def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
 #Calculate the divergence of the velocity field
 def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 	if (ndim == 2):
-		divv=(ds['vy'][margin+1:egy-margin+1,margin:egx-margin]-\
-		ds['vy'][margin-1:egy-margin-1,margin:egx-margin])/(2.0*dy) \
-	    +(ds['vx'][margin:egy-margin,margin+1:egx-margin+1]-\
-		ds['vx'][margin:egy-margin,margin-1:egx-margin-1])/(2.0*dx) 
+		# np.gradient: same size as the input (the old margin-based slicing broke for margin=0)
+		divv=np.gradient(ds['vx'],dx,axis=1)
+		if np.size(ds['vy']) > 1:
+			divv=divv+np.gradient(ds['vy'],dy,axis=0)
+		return(divv)
 	if (ndim == 3):
 		divv=np.zeros((egz,egy,egx))
 		#divv = (
@@ -323,10 +323,15 @@ def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 	return(dvx_dx + dvy_dy + dvz_dz)
 ################################################################
 def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=False,rad=False):
+	"""Sample variables along the shock normal at cell (zrow,col,row) = (z,y,x) indices."""
 	#Step ii: find shock normal based on density gradient
 	if ndim == 2:
-	    normx=gradx[col,row]/gradmag[col,row]
-	    normy=grady[col,row]/gradmag[col,row]
+		if gradmag[col,row] <= 1.0e-16:
+			normx=0.0
+			normy=0.0
+		else:
+			normx=gradx[col,row]/gradmag[col,row]
+			normy=grady[col,row]/gradmag[col,row]
 	if ndim == 3:
 		#print(zrow)
 		#print(row)
@@ -352,13 +357,14 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 		
 	#print(np.shape(tempz))
 	#use periodic BC to fix negative values
-	nz, ny, nx = divv.shape
+	if ndim == 3:
+		nz, ny, nx = divv.shape
 	for ii in range(0,2*avecyl+1):
 		if ndim == 2:
 			if tempx[ii] < 0:
-				tempx[ii]=np.size(divv[:,0])+tempx[ii]
+				tempx[ii]=np.size(divv[0,:])+tempx[ii]
 			if tempy[ii] < 0:
-				tempy[ii]=np.size(divv[0,:])+tempy[ii]
+				tempy[ii]=np.size(divv[:,0])+tempy[ii]
 #		if ndim == 3:
 #			#if tempz[ii] < 0:
 #			#	tempz[ii]=np.size(divv[:,0,0])+tempz[ii]
@@ -370,10 +376,10 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 	#use periodic BC to fix outside grid values
 	for ii in range(0,2*avecyl+1):
 		if ndim == 2:
-			if tempx[ii] > np.size(divv[:,0])-1:
-				tempx[ii]=tempx[ii]-np.size(divv[:,0])
-			if tempy[ii] > np.size(divv[0,:])-1:
-				tempy[ii]=tempy[ii]-np.size(divv[0,:])
+			if tempx[ii] > np.size(divv[0,:])-1:
+				tempx[ii]=tempx[ii]-np.size(divv[0,:])
+			if tempy[ii] > np.size(divv[:,0])-1:
+				tempy[ii]=tempy[ii]-np.size(divv[:,0])
 		if ndim == 3:
 			#if tempx[ii] > np.size(divv[0,0,:])-1:
 			#	tempx[ii]=tempx[ii]-np.size(divv[0,0,:])
@@ -419,8 +425,9 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 			normvals['bz']=bznorm
 			normvals['normx']=normx
 			normvals['normy']=normy
-			normvals['perpx']=(-normy/normx)/np.sqrt(normy**2/normx**2+1.0)
-			normvals['perpy']=1.0/np.sqrt(normy**2/normx**2+1.0)
+			sgn=1.0 if normx >= 0 else -1.0
+			normvals['perpx']=-normy*sgn
+			normvals['perpy']=normx*sgn
 			normvals['bperp']=normvals['normx']*normvals['bx']+normvals['normy']*normvals['by']    
 			normvals['bpar']=normvals['perpx']*normvals['bx']+normvals['perpy']*normvals['by']
 			normvals['vperp']=normvals['normx']*normvals['vx']+normvals['normy']*normvals['vy']    
@@ -544,17 +551,10 @@ def removeNonMaxPar(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl,n
 #	pool=mp.Pool(nproc)
 	print('using ',nproc,' cores')
 #	itrange=list(range(0,np.size(col)))
-	pitrange=np.zeros((nproc,2))
-	st=int(0)
-	for i in range(0,nproc-1):
-		pitrange[i,0]=int(st)
-		pitrange[i,1]=int(st+np.floor(np.size(col)/nproc))
-		st=pitrange[i,1]+1
-	pitrange[nproc-1,0]=int(st)
-	pitrange[nproc-1,1]=int(np.size(col)-1)
-	print('Each processor doing ',pitrange[1,0]-pitrange[0,0],' elements')
+	pitrange=chunkRanges(np.size(col),nproc)
+	print('Each processor doing ~',int(np.ceil(np.size(col)/nproc)),' elements')
 
-	sol=pool.starmap(removeNonMaxParLoop,[(pitrange[j,0],pitrange[j,1],col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl) for j in range(0,nproc)])
+	sol=pool.starmap(removeNonMaxParLoop,[(a,b,col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl) for a,b in pitrange])
 	pool.close()
 	pool.join()
 
@@ -608,11 +608,10 @@ def shocknormvals(var,tempx,tempy,tempx2,tempy2,ndim,normx,normy,avecyl):
 	#Calculate the values normal to the shock
     tempa=np.zeros([2*avecyl+1,2*avecyl+1])
     
-    #populate the array (density)
+    #populate the array (density); var is indexed [y,x], so tempa is [y-offset, x-offset]
     for ii in range(0,2*avecyl+1):
         for jj in range(0,2*avecyl+1):
-            #print(ii,jj,tempx[ii].astype(int),tempy[jj].astype(int))
-            tempa[ii,jj]=var[tempx[ii].astype(int),tempy[jj].astype(int)]
+            tempa[jj,ii]=var[int(tempy[jj]),int(tempx[ii])]
 
     #find the normal line
     normlinex=normx*np.linspace(-avecyl,avecyl,avecyl*2+1)#(indgen(2*avecyl+1)-avecyl)
@@ -624,7 +623,7 @@ def shocknormvals(var,tempx,tempy,tempx2,tempy2,ndim,normx,normy,avecyl):
     #var2=rgi([normlinex,normliney])
     var2=np.zeros(2*avecyl+1)
     for ii in range(0,2*avecyl+1):
-        var2[ii]=rgi([normliney[ii],normlinex[ii]])
+        var2[ii]=rgi((normliney[ii],normlinex[ii]))[()]
 #	var2=interp2d(tempa,tempx2,tempy2,normlinex,normliney)
     #print(normliney)
     return(var2)
@@ -993,138 +992,22 @@ def restoreShocks(fname):
 
 ###############################################################################
 def shockFilter(shocks,maxDis):
-	#Filter the shocks to remove anything that isnt near a related shock
-	#Naive approach for getting rid of some of the spurious points
-	
-	#Define a return dictionarry
+	"""Remove isolated shock points: a point is dropped if its nearest other point of the
+	same type is at least maxDis cells away. Works for 2D [y,x] and 3D [z,y,x] locations.
+	Every shock type is returned (possibly unchanged), along with matching '<type>mach' rows."""
+	from scipy.spatial import cKDTree
 	shocks2={}
-	
-	#Slow shocks
-	if np.size(shocks['slow']) > 2:
-		isol=[]
-		tempx=shocks['slow'][:,1]
-		tempy=shocks['slow'][:,0]
-		for i in range(0,np.size(shocks['slow'][:,1])):
-			ix=shocks['slow'][i,1]
-			iy=shocks['slow'][i,0]
-			tempd=np.square(tempx-ix)+np.square(tempy-iy)
-			tempd=np.sqrt(tempd[np.nonzero(tempd)])
-			if np.size(tempd) >1:
-				if np.min(tempd) >=maxDis:
-					#print(i)
-					isol.append(i)
-		slowx=np.delete(shocks['slow'][:,1],isol)
-		slowy=np.delete(shocks['slow'][:,0],isol)
-		slow=np.zeros(shape=(np.size(slowx),2))
-		slow[:,1]=slowx.astype('int')
-		slow[:,0]=slowy.astype('int')
-		shocks2['slow']=slow.astype('int')
-	
-	#fast shocks
-	if np.size(shocks['fast']) > 2:
-		isol=[]
-		tempx=shocks['fast'][:,1]
-		tempy=shocks['fast'][:,0]
-		for i in range(0,np.size(shocks['fast'][:,1])):
-			ix=shocks['fast'][i,1]
-			iy=shocks['fast'][i,0]
-			tempd=np.square(tempx-ix)+np.square(tempy-iy)
-			tempd=np.sqrt(tempd[np.nonzero(tempd)])
-			if np.size(tempd) >1:
-				if np.min(tempd) >=maxDis:
-					#print(i)
-					isol.append(i)
-		fastx=np.delete(shocks['fast'][:,1],isol)
-		fasty=np.delete(shocks['fast'][:,0],isol)
-		fast=np.zeros(shape=(np.size(fastx),2))
-		fast[:,1]=fastx.astype('int')
-		fast[:,0]=fasty.astype('int')
-		shocks2['fast']=fast.astype('int')
-	
-	#int1 shocks
-	if np.size(shocks['int1']) > 2:
-		isol=[]
-		tempx=shocks['int1'][:,1]
-		tempy=shocks['int1'][:,0]
-		for i in range(0,np.size(shocks['int1'][:,1])):
-			ix=shocks['int1'][i,1]
-			iy=shocks['int1'][i,0]
-			tempd=np.square(tempx-ix)+np.square(tempy-iy)
-			tempd=np.sqrt(tempd[np.nonzero(tempd)])
-			if np.size(tempd) >1:
-				if np.min(tempd) >=maxDis:
-					#print(i)
-					isol.append(i)
-		int1x=np.delete(shocks['int1'][:,1],isol)
-		int1y=np.delete(shocks['int1'][:,0],isol)
-		int1=np.zeros(shape=(np.size(int1x),2))
-		int1[:,1]=int1x.astype('int')
-		int1[:,0]=int1y.astype('int')
-		shocks2['int1']=int1.astype('int')
-	
-	#int1 shocks
-	if np.size(shocks['int2']) > 2:
-		isol=[]
-		tempx=shocks['int2'][:,1]
-		tempy=shocks['int2'][:,0]
-		for i in range(0,np.size(shocks['int2'][:,1])):
-			ix=shocks['int2'][i,1]
-			iy=shocks['int2'][i,0]
-			tempd=np.square(tempx-ix)+np.square(tempy-iy)
-			tempd=np.sqrt(tempd[np.nonzero(tempd)])
-			if np.size(tempd) >1:
-				if np.min(tempd) >=maxDis:
-					#print(i)
-					isol.append(i)
-		int2x=np.delete(shocks['int2'][:,1],isol)
-		int2y=np.delete(shocks['int2'][:,0],isol)
-		int2=np.zeros(shape=(np.size(int2x),2))
-		int2[:,1]=int2x.astype('int')
-		int2[:,0]=int2y.astype('int')
-		shocks2['int2']=int2.astype('int')
-	
-	#int1 shocks
-	if np.size(shocks['int3']) > 2:
-		isol=[]
-		tempx=shocks['int3'][:,1]
-		tempy=shocks['int3'][:,0]
-		for i in range(0,np.size(shocks['int3'][:,1])):
-			ix=shocks['int3'][i,1]
-			iy=shocks['int3'][i,0]
-			tempd=np.square(tempx-ix)+np.square(tempy-iy)
-			tempd=np.sqrt(tempd[np.nonzero(tempd)])
-			if np.size(tempd) >1:
-				if np.min(tempd) >=maxDis:
-					#print(i)
-					isol.append(i)
-		int3x=np.delete(shocks['int3'][:,1],isol)
-		int3y=np.delete(shocks['int3'][:,0],isol)
-		int3=np.zeros(shape=(np.size(int3x),2))
-		int3[:,1]=int3x.astype('int')
-		int3[:,0]=int3y.astype('int')
-		shocks2['int3']=int3.astype('int')
-	
-	#int1 shocks
-	if np.size(shocks['int4']) > 2:
-		isol=[]
-		tempx=shocks['int4'][:,1]
-		tempy=shocks['int4'][:,0]
-		for i in range(0,np.size(shocks['int4'][:,1])):
-			ix=shocks['int4'][i,1]
-			iy=shocks['int4'][i,0]
-			tempd=np.square(tempx-ix)+np.square(tempy-iy)
-			tempd=np.sqrt(tempd[np.nonzero(tempd)])
-			if np.size(tempd) >1:
-				if np.min(tempd) >=maxDis:
-					#print(i)
-					isol.append(i)
-		int4x=np.delete(shocks['int4'][:,1],isol)
-		int4y=np.delete(shocks['int4'][:,0],isol)
-		int4=np.zeros(shape=(np.size(int4x),2))
-		int4[:,1]=int4x.astype('int')
-		int4[:,0]=int4y.astype('int')
-		shocks2['int4']=int4.astype('int')
-	
+	for k in TRANS.values():
+		if k not in shocks:
+			continue
+		pts=np.asarray(shocks[k])
+		keep=np.ones(len(pts),dtype=bool)
+		if len(pts) >= 3:
+			d,_=cKDTree(pts).query(pts,k=2)    # d[:,1] = distance to nearest other point
+			keep=d[:,1] < maxDis
+		shocks2[k]=pts[keep].astype('int')
+		if k+'mach' in shocks:
+			shocks2[k+'mach']=np.asarray(shocks[k+'mach'])[keep]
 	return(shocks2)
 
 ###############################################################################
@@ -1145,22 +1028,18 @@ def shockLine(loc,ds,avecyl=5,ndim=2,rad=False,getPoints=False,getEnergy=False):
 	egy=np.size(ds['ygrid'])-1
 	egz=0.0
 	if (ndim == 3):
+		# shockid() stores 3D locations as [z, y, x] = [zrow, col, row]
+		zrow=loc[0]
 		col=loc[1]
-		row=loc[0]
-		zrow=loc[2]
+		row=loc[2]
 		egz=np.size(ds['zgrid'])-1
 
-	#Define the grid
-	x=ds['xgrid'][margin:egx-margin]
-	y=ds['ygrid'][margin:egy-margin]
-	if (ndim == 3):
-		z=ds['zgrid'][margin:egz-margin]
-
-	dx=x[1]-x[0]
-	dy=y[1]-y[0]
+	#Grid spacing (taken from the full grid so small domains don't trim to a single point)
+	dx=ds['xgrid'][1]-ds['xgrid'][0]
+	dy=ds['ygrid'][1]-ds['ygrid'][0]
 	dz=0.0
 	if (ndim == 3):
-		z[1]-z[0]
+		dz=ds['zgrid'][1]-ds['zgrid'][0]
 	#Smooth the data (if needed)
 	#ds=smoothdata(rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim,species,margin,smthfac)
 	
@@ -1170,13 +1049,14 @@ def shockLine(loc,ds,avecyl=5,ndim=2,rad=False,getPoints=False,getEnergy=False):
 	
 	#Calculate the density gradients
 	#print('Calculating density gradients')
-	gradrox=np.gradient(ds['ro'],axis=1)
-	gradroy=np.gradient(ds['ro'],axis=0)
 	gradroz=0.0
+	if (ndim == 2):
+		gradrox=np.gradient(ds['ro'],dx,axis=1)
+		gradroy=np.gradient(ds['ro'],dy,axis=0)
 	if (ndim == 3):
-		gradrox=np.gradient(ds['ro'],axis=2)
-		gradroy=np.gradient(ds['ro'],axis=1)
-		gradroz=np.gradient(ds['ro'],axis=0)
+		gradrox=np.gradient(ds['ro'],dx,axis=2)
+		gradroy=np.gradient(ds['ro'],dy,axis=1)
+		gradroz=np.gradient(ds['ro'],dz,axis=0)
 	gradmag=np.sqrt(gradrox**2+gradroy**2+gradroz**2)
 	
 	#Get the properties along the shock
