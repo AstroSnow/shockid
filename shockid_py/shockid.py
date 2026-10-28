@@ -7,7 +7,16 @@ To Do:
 import numpy as np
 import time
 
-def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,nproc=1,convl=0.0001,avecyl=2):
+def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,nproc=1,convl=0.0001,avecyl=2,
+            normsmooth=0.0,dbproject=False):
+	"""
+	normsmooth : Gaussian sigma (cells) applied to density ONLY for computing the shock normal.
+	             The sampled jump values still come from the (smthfac-smoothed) data. 0 = off.
+	dbproject  : refine each normal using div(B)=0: remove its component along
+	             dB = B_post - B_pre and resample. Skipped where |dB| < 5% of |B|.
+	Both mainly help intermediate shocks, whose classification is the most sensitive
+	to normal errors. Each shock type also gets a '<type>qual' array, see shockClassLoop.
+	"""
 #	import numpy as np
 	#Parameters for shock limits
 #	convl=0.0001 #Convergence threshold
@@ -63,6 +72,17 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		gradrox=np.gradient(ds['ro'],dx,axis=2)
 		gradroy=np.gradient(ds['ro'],dy,axis=1)
 		gradroz=np.gradient(ds['ro'],dz,axis=0)
+	if normsmooth > 0:
+		#Gradients of a smoothed density for the normal direction only
+		from scipy.ndimage import gaussian_filter
+		rosm=gaussian_filter(ds['ro'],normsmooth)
+		if (ndim == 2):
+			gradrox=np.gradient(rosm,dx,axis=1)
+			gradroy=np.gradient(rosm,dy,axis=0)
+		if (ndim == 3):
+			gradrox=np.gradient(rosm,dx,axis=2)
+			gradroy=np.gradient(rosm,dy,axis=1)
+			gradroz=np.gradient(rosm,dz,axis=0)
 	gradmag=np.sqrt(gradrox**2+gradroy**2+gradroz**2)
 
 	#identify candidate cells based on divv
@@ -173,7 +193,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	if nproc == 1:
 		#Series loop. Can be removed at some point
 		shocks = shockClassLoop(0, np.size(col)-1, col, row, zrow, ds, gradrox, gradroy,
-                          gradroz, gradmag, divv, ndim, avecyl, shocktol)
+                          gradroz, gradmag, divv, ndim, avecyl, shocktol, dbproject)
 		
 	if nproc > 1:
 		#Parallel loop
@@ -182,7 +202,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		print('using ',nproc,' cores')
 		pitrange=chunkRanges(np.size(col),nproc)
 		print('Each processor doing ~',int(np.ceil(np.size(col)/nproc)),' elements')
-		sol=pool.starmap(shockClassLoop,[(a,b,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,shocktol) for a,b in pitrange])
+		sol=pool.starmap(shockClassLoop,[(a,b,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,shocktol,dbproject) for a,b in pitrange])
 		pool.close()
 		pool.join()
 		#NEED TO REJOIN EVERYTHING
@@ -205,19 +225,63 @@ def chunkRanges(n, nproc):
 TRANS = {(1,2):'fast', (3,4):'slow', (1,3):'int1',
          (1,4):'int2', (2,3):'int3', (2,4):'int4'}
 
+def refineNormalDB(normarr, avecyl, ndim, mindb=0.05):
+    """Normal refined with div(B)=0: B_n is continuous, so the true normal is perpendicular
+    to dB = B_post - B_pre. Returns the refined unit normal, or None if |dB| is too small
+    (relative to |B| upstream) for the constraint to be meaningful."""
+    ipre, ipos = prepostIndex(normarr['ro'], avecyl)
+    comps = ('bx', 'by', 'bz') if ndim == 3 else ('bx', 'by')
+    def val(k, i):
+        v = np.asarray(normarr[k]); return float(v[i]) if v.size > 1 else float(v)
+    dB = np.array([val(k, ipos) - val(k, ipre) for k in comps])
+    Bmag = np.sqrt(sum(val(k, ipre)**2 for k in ('bx', 'by', 'bz')))
+    nvec = np.array([normarr['normx'], normarr['normy']] + ([normarr['normz']] if ndim == 3 else []), dtype=float)
+    if np.linalg.norm(dB) <= mindb*Bmag or np.linalg.norm(nvec) == 0:
+        return None
+    e = dB/np.linalg.norm(dB)
+    nnew = nvec - (nvec @ e)*e
+    mag = np.linalg.norm(nnew)
+    if mag < 1e-3:              # dB parallel to n: constraint inconsistent, keep original
+        return None
+    return nnew/mag
+
+def shockQuality(normarr, avecyl, mpre, mpos):
+    """[mach_margin, bn_jump] for a classified shock.
+    mach_margin : smallest |M-1| over the six finite Mach numbers (how close the
+                  classification is to flipping)
+    bn_jump     : |Bn_post - Bn_pre| / |B_pre|; should be ~0 (div B = 0), large values
+                  mean the normal is unreliable. With dbproject=True the refined normal
+                  makes this ~0 by construction, so it is only informative without it
+                  (or where the refinement was skipped because |dB| was small)."""
+    m = np.abs(np.r_[mpre, mpos] - 1.0)
+    m = m[np.isfinite(m)]
+    margin = float(np.min(m)) if m.size else np.nan
+    ipre, ipos = prepostIndex(normarr['ro'], avecyl)
+    bz = np.asarray(normarr['bz'])
+    bzpre = float(bz[ipre]) if bz.size > 1 else float(bz)
+    Bmag = np.sqrt(normarr['bx'][ipre]**2 + normarr['by'][ipre]**2 + bzpre**2)
+    bnj = abs(normarr['bperp'][ipos] - normarr['bperp'][ipre])/Bmag if Bmag > 1e-30 else np.nan
+    return [margin, float(bnj)]
+
 def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
-                   gradmag, divv, ndim, avecyl, tol=0.05):
+                   gradmag, divv, ndim, avecyl, tol=0.05, dbproject=False):
+    """Classify candidate cells. Returns, per shock type k:
+    k         : locations, [y,x] in 2D or [z,y,x] in 3D
+    k+'mach'  : (slow, Alfven, fast) Mach numbers pre then post
+    k+'qual'  : [mach_margin, bn_jump], see shockQuality"""
     hits = {k: [] for k in TRANS.values()}
     mach = {k: [] for k in TRANS.values()}
+    qual = {k: [] for k in TRANS.values()}
     for i in range(int(istart), int(iend)+1):
-        if ndim == 2:
-            normarr = getNormVals(col[i],row[i],zrow,ds,gradrox,gradroy,gradroz,
-                                  gradmag,divv,ndim,avecyl,gcalc=False)
-            loc = [col[i], row[i]]
-        else:
-            normarr = getNormVals(col[i],row[i],zrow[i],ds,gradrox,gradroy,gradroz,
-                                  gradmag,divv,ndim,avecyl,gcalc=False)
-            loc = [zrow[i], col[i], row[i]]
+        z = zrow if ndim == 2 else zrow[i]
+        normarr = getNormVals(col[i],row[i],z,ds,gradrox,gradroy,gradroz,
+                              gradmag,divv,ndim,avecyl,gcalc=False)
+        loc = [col[i], row[i]] if ndim == 2 else [zrow[i], col[i], row[i]]
+        if dbproject:
+            nnew = refineNormalDB(normarr, avecyl, ndim)
+            if nnew is not None:
+                normarr = getNormVals(col[i],row[i],z,ds,gradrox,gradroy,gradroz,
+                                      gradmag,divv,ndim,avecyl,gcalc=False,normal=nnew)
         res = classifyShock(normarr, avecyl, tol=tol)
         if res is None:
             continue
@@ -226,10 +290,12 @@ def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
         if key is not None:
             hits[key].append(loc)
             mach[key].append(list(mpre) + list(mpos))
+            qual[key].append(shockQuality(normarr, avecyl, mpre, mpos))
     shocks = {}
     for k in hits:
         shocks[k] = np.array(hits[k], dtype=int).reshape(-1, ndim)
         shocks[k+'mach'] = np.array(mach[k], dtype=float).reshape(-1, 6)
+        shocks[k+'qual'] = np.array(qual[k], dtype=float).reshape(-1, 2)
     return shocks
 #####################################################################################################
 def classifyShock(normarr, avecyl, off=None, tol=0.05):
@@ -322,8 +388,9 @@ def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
 		#ds['vz'][margin-1:egz-margin-1,margin:egy-margin,margin:egx-margin])/(2.0*dz)
 	return(dvx_dx + dvy_dy + dvz_dz)
 ################################################################
-def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=False,rad=False):
-	"""Sample variables along the shock normal at cell (zrow,col,row) = (z,y,x) indices."""
+def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=False,rad=False,normal=None):
+	"""Sample variables along the shock normal at cell (zrow,col,row) = (z,y,x) indices.
+	normal : optional unit normal (nx,ny[,nz]) to use instead of the density gradient."""
 	#Step ii: find shock normal based on density gradient
 	if ndim == 2:
 		if gradmag[col,row] <= 1.0e-16:
@@ -344,6 +411,10 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 			normx=gradx[zrow,col,row]/gradmag[zrow,col,row]
 			normy=grady[zrow,col,row]/gradmag[zrow,col,row]
 			normz=gradz[zrow,col,row]/gradmag[zrow,col,row]
+	if normal is not None:
+		normx,normy=float(normal[0]),float(normal[1])
+		if ndim == 3:
+			normz=float(normal[2])
 	#print(zrow,col,row,normx,normy,normz,np.argmax(gradx),grady[zrow,col,row],gradz[zrow,col,row],gradmag[zrow,col,row])		
 	#stop
 	tempx=np.linspace(row-avecyl,row+avecyl,2*avecyl+1)
@@ -1006,8 +1077,9 @@ def shockFilter(shocks,maxDis):
 			d,_=cKDTree(pts).query(pts,k=2)    # d[:,1] = distance to nearest other point
 			keep=d[:,1] < maxDis
 		shocks2[k]=pts[keep].astype('int')
-		if k+'mach' in shocks:
-			shocks2[k+'mach']=np.asarray(shocks[k+'mach'])[keep]
+		for suffix in ('mach','qual'):
+			if k+suffix in shocks:
+				shocks2[k+suffix]=np.asarray(shocks[k+suffix])[keep]
 	return(shocks2)
 
 ###############################################################################
