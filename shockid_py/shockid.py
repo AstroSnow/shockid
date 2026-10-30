@@ -8,12 +8,16 @@ import numpy as np
 import time
 
 def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,nproc=1,convl=0.0001,avecyl=2,
-            normsmooth=0.0,dbproject=False):
+            normsmooth=0.0,dbproject=False,periodic=True):
 	"""
 	normsmooth : Gaussian sigma (cells) applied to density ONLY for computing the shock normal.
 	             The sampled jump values still come from the (smthfac-smoothed) data. 0 = off.
 	dbproject  : refine each normal using div(B)=0: remove its component along
 	             dB = B_post - B_pre and resample. Skipped where |dB| < 5% of |B|.
+	periodic   : True  - sampling windows near the boundary wrap around (periodic domains).
+	             False - discard candidates within max(avecyl,2) cells of any boundary,
+	                     so no window ever leaves the domain (non-periodic domains).
+	Grids may be non-uniform (stretched): all derivatives use the coordinate arrays.
 	Both mainly help intermediate shocks, whose classification is the most sensitive
 	to normal errors. Each shock type also gets a '<type>qual' array, see shockClassLoop.
 	"""
@@ -43,46 +47,43 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		egz=np.size(gridz)
 
 	#Define the grid
-	x=gridx[margin:egx-margin]
-	y=gridy[margin:egy-margin]
+	#Coordinates (not spacings), so derivatives are correct on stretched grids
+	x=np.asarray(gridx)[margin:egx-margin]
+	y=np.asarray(gridy)[margin:egy-margin]
+	z=0.0
 	if (ndim == 3):
-		z=gridz[margin:egz-margin]
+		z=np.asarray(gridz)[margin:egz-margin]
 
-	dx=x[1]-x[0]
-	dy=y[1]-y[0]
-	dz=0.0
-	if (ndim == 3):
-		dz=z[1]-z[0]
 	#Smooth the data (if needed)
 	ds=smoothdata(rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim,species,margin,smthfac)
 
 	#Divergence of velocity field
 	print('Calculating velocity divergence')
-	divv=divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz)
+	divv=divergence(ds,ndim,x,y,z)
     
 	#print(divv[0,:,0])
 	
-	#Calculate the density gradients
+	#Calculate the density gradients (coordinate arrays, so stretched grids are handled)
 	print('Calculating density gradients')
 	if (ndim == 2):
-		gradrox=np.gradient(ds['ro'],dx,axis=1)
-		gradroy=np.gradient(ds['ro'],dy,axis=0)
+		gradrox=np.gradient(ds['ro'],x,axis=1)
+		gradroy=np.gradient(ds['ro'],y,axis=0)
 	gradroz=0.0
 	if (ndim == 3):
-		gradrox=np.gradient(ds['ro'],dx,axis=2)
-		gradroy=np.gradient(ds['ro'],dy,axis=1)
-		gradroz=np.gradient(ds['ro'],dz,axis=0)
+		gradrox=np.gradient(ds['ro'],x,axis=2)
+		gradroy=np.gradient(ds['ro'],y,axis=1)
+		gradroz=np.gradient(ds['ro'],z,axis=0)
 	if normsmooth > 0:
 		#Gradients of a smoothed density for the normal direction only
 		from scipy.ndimage import gaussian_filter
 		rosm=gaussian_filter(ds['ro'],normsmooth)
 		if (ndim == 2):
-			gradrox=np.gradient(rosm,dx,axis=1)
-			gradroy=np.gradient(rosm,dy,axis=0)
+			gradrox=np.gradient(rosm,x,axis=1)
+			gradroy=np.gradient(rosm,y,axis=0)
 		if (ndim == 3):
-			gradrox=np.gradient(rosm,dx,axis=2)
-			gradroy=np.gradient(rosm,dy,axis=1)
-			gradroz=np.gradient(rosm,dz,axis=0)
+			gradrox=np.gradient(rosm,x,axis=2)
+			gradroy=np.gradient(rosm,y,axis=1)
+			gradroz=np.gradient(rosm,z,axis=0)
 	gradmag=np.sqrt(gradrox**2+gradroy**2+gradroz**2)
 
 	#identify candidate cells based on divv
@@ -99,33 +100,22 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		col=temp[:,1]
 		zrow=temp[:,0]
 		
-		"""#Remove the edges
-		earr=np.argwhere(col < egx-margin-avecyl-1).flatten()
-		col=col[earr]
-		row=row[earr]
-		zrow=zrow[earr]
-		earr=np.argwhere(col >margin+avecyl+1).flatten()
-		col=col[earr]
-		row=row[earr]
-		zrow=zrow[earr]
-		earr=np.argwhere(row < egx-margin-avecyl-1).flatten()
-		col=col[earr]
-		row=row[earr]
-		zrow=zrow[earr]
-		earr=np.argwhere(row >margin+avecyl+1).flatten()
-		col=col[earr]
-		row=row[earr]
-		zrow=zrow[earr]
-		earr=np.argwhere(zrow < egx-margin-avecyl-1).flatten()
-		col=col[earr]
-		row=row[earr]
-		zrow=zrow[earr]
-		earr=np.argwhere(zrow >margin+avecyl+1).flatten()
-		col=col[earr]
-		row=row[earr]
-		zrow=zrow[earr]"""
-		
 		#[col,row,zrow] = np.argwhere(divv < -convl)
+
+	if not periodic:
+		#Remove candidates whose sampling window would leave the domain. The window is
+		#+-avecyl cells for classification and +-2 for removeNonMax. Each index is checked
+		#against its own axis length (col: y, row: x, zrow: z).
+		w=max(int(avecyl),2)
+		ny_,nx_=np.shape(divv)[-2:]
+		keep=(col >= w) & (col <= ny_-1-w) & (row >= w) & (row <= nx_-1-w)
+		if (ndim == 3):
+			nz_=np.shape(divv)[0]
+			keep=keep & (zrow >= w) & (zrow <= nz_-1-w)
+			zrow=zrow[keep]
+		print('Removing',int(np.sum(~keep)),'candidates within',w,'cells of the boundary')
+		col=col[keep]
+		row=row[keep]
 
 	"""#Filter the data 
 	if data_subset == 1:
@@ -354,39 +344,19 @@ def smoothdata(ro,vx,vy,vz,bx,by,bz,pr,ndim,species,margin,smthfac):
 	return(ds)
 ################################################################
 #Calculate the divergence of the velocity field
-def divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz):
+def divergence(ds,ndim,x,y,z):
+	"""div(v) using the coordinate arrays x, y (and z), so non-uniform grids are handled
+	(np.gradient with coordinates: second-order on stretched grids, exact same stencil
+	as a scalar spacing on uniform grids)."""
 	if (ndim == 2):
-		# np.gradient: same size as the input (the old margin-based slicing broke for margin=0)
-		divv=np.gradient(ds['vx'],dx,axis=1)
+		divv=np.gradient(ds['vx'],x,axis=1)
 		if np.size(ds['vy']) > 1:
-			divv=divv+np.gradient(ds['vy'],dy,axis=0)
+			divv=divv+np.gradient(ds['vy'],y,axis=0)
 		return(divv)
 	if (ndim == 3):
-		divv=np.zeros((egz,egy,egx))
-		#divv = (
-		#		np.gradient(ds['vx'], dx, axis=2)
-		#		+ np.gradient(ds['vy'], dy, axis=1)
-		#		+ np.gradient(ds['vz'], dz, axis=0)
-		#		)
-		vx = ds['vx']
-		vy = ds['vy']
-		vz = ds['vz']
-
-		dvx_dx = np.gradient(vx, dx, axis=2)
-		dvy_dy = np.gradient(vy, dy, axis=1)
-		dvz_dz = np.gradient(vz, dz, axis=0)
-
-
-   		#dvx_dx = (ds['vx'][:, :, 2:] - ds['vx'][:, :, :-2]) / (2*dx)
-		#dvy_dy = (ds['vy'][:, 2:, :] - ds['vy'][:, :-2, :]) / (2*dy)
-		#dvz_dz = (ds['vz'][2:, :, :] - ds['vz'][:-2, :, :]) / (2*dz)
-		#divv[margin:egz-margin,margin:egy-margin,margin:egx-margin]=(ds['vy'][margin:egz-margin,margin+1:egy-margin+1,margin:egx-margin]-\
-		#ds['vy'][margin:egz-margin,margin-1:egy-margin-1,margin:egx-margin])/(2.0*dy) \
-	    #+(ds['vx'][margin:egz-margin,margin:egy-margin,margin+1:egx-margin+1]-\
-		#ds['vx'][margin:egz-margin,margin:egy-margin,margin-1:egx-margin-1])/(2.0*dx) \
-	    #+(ds['vz'][margin+1:egz-margin+1,margin:egy-margin,margin:egx-margin]-\
-		#ds['vz'][margin-1:egz-margin-1,margin:egy-margin,margin:egx-margin])/(2.0*dz)
-	return(dvx_dx + dvy_dy + dvz_dz)
+		return(np.gradient(ds['vx'],x,axis=2)
+		       +np.gradient(ds['vy'],y,axis=1)
+		       +np.gradient(ds['vz'],z,axis=0))
 ################################################################
 def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcalc=False,rad=False,normal=None):
 	"""Sample variables along the shock normal at cell (zrow,col,row) = (z,y,x) indices.
@@ -1106,29 +1076,29 @@ def shockLine(loc,ds,avecyl=5,ndim=2,rad=False,getPoints=False,getEnergy=False):
 		row=loc[2]
 		egz=np.size(ds['zgrid'])-1
 
-	#Grid spacing (taken from the full grid so small domains don't trim to a single point)
-	dx=ds['xgrid'][1]-ds['xgrid'][0]
-	dy=ds['ygrid'][1]-ds['ygrid'][0]
-	dz=0.0
+	#Grid coordinates (non-uniform grids allowed, as in shockid())
+	x=ds['xgrid']
+	y=ds['ygrid']
+	z=0.0
 	if (ndim == 3):
-		dz=ds['zgrid'][1]-ds['zgrid'][0]
+		z=ds['zgrid']
 	#Smooth the data (if needed)
 	#ds=smoothdata(rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim,species,margin,smthfac)
 	
 	#Divergence of velocity field
 	#print('Calculating velocity divergence')
-	divv=divergence(ds,ndim,margin,egx,egy,egz,dx,dy,dz)
+	divv=divergence(ds,ndim,x,y,z)
 	
 	#Calculate the density gradients
 	#print('Calculating density gradients')
 	gradroz=0.0
 	if (ndim == 2):
-		gradrox=np.gradient(ds['ro'],dx,axis=1)
-		gradroy=np.gradient(ds['ro'],dy,axis=0)
+		gradrox=np.gradient(ds['ro'],x,axis=1)
+		gradroy=np.gradient(ds['ro'],y,axis=0)
 	if (ndim == 3):
-		gradrox=np.gradient(ds['ro'],dx,axis=2)
-		gradroy=np.gradient(ds['ro'],dy,axis=1)
-		gradroz=np.gradient(ds['ro'],dz,axis=0)
+		gradrox=np.gradient(ds['ro'],x,axis=2)
+		gradroy=np.gradient(ds['ro'],y,axis=1)
+		gradroz=np.gradient(ds['ro'],z,axis=0)
 	gradmag=np.sqrt(gradrox**2+gradroy**2+gradroz**2)
 	
 	#Get the properties along the shock
