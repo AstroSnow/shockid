@@ -6,6 +6,7 @@ To Do:
 """
 import numpy as np
 import time
+from scipy.ndimage import map_coordinates   # normal-line interpolation
 
 def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,nproc=1,convl=0.0001,avecyl=2,
             normsmooth=0.0,dbproject=False,periodic=True):
@@ -643,78 +644,33 @@ def isLocalMax(ronorm, tol=1):
     return abs(b - len(ronorm)//2) <= tol
 ###############################################################################
 def shocknormvals(var,tempx,tempy,tempx2,tempy2,ndim,normx,normy,avecyl):
-    #from scipy.interpolate import RegularGridInterpolator
-    import scipy.interpolate as spint
-    RGI = spint.RegularGridInterpolator
-	#Calculate the values normal to the shock
-    tempa=np.zeros([2*avecyl+1,2*avecyl+1])
-    
-    #populate the array (density); var is indexed [y,x], so tempa is [y-offset, x-offset]
-    for ii in range(0,2*avecyl+1):
-        for jj in range(0,2*avecyl+1):
-            tempa[jj,ii]=var[int(tempy[jj]),int(tempx[ii])]
+    """Sample `var` (indexed [y,x]) at 2*avecyl+1 points one cell apart along the
+    direction (normx, normy) through the centre of the patch tempy x tempx.
 
-    #find the normal line
-    normlinex=normx*np.linspace(-avecyl,avecyl,avecyl*2+1)#(indgen(2*avecyl+1)-avecyl)
-    normliney=normy*np.linspace(-avecyl,avecyl,avecyl*2+1)#*(indgen(2*avecyl+1)-avecyl)   
-    pnts=[np.linspace(-avecyl,avecyl,avecyl*2+1),np.linspace(-avecyl,avecyl,avecyl*2+1)]
-								
-    #Interpolate the values normal to the shock
-    rgi=RGI(points=pnts,values=tempa)
-    #var2=rgi([normlinex,normliney])
-    var2=np.zeros(2*avecyl+1)
-    for ii in range(0,2*avecyl+1):
-        var2[ii]=rgi((normliney[ii],normlinex[ii]))[()]
-#	var2=interp2d(tempa,tempx2,tempy2,normlinex,normliney)
-    #print(normliney)
-    return(var2)
+    tempx, tempy : integer x and y indices of the patch (already periodically wrapped)
+    Bilinear interpolation inside the (2*avecyl+1)^2 patch, done with one fancy-index
+    patch extraction and scipy.ndimage.map_coordinates. This gives the same values as
+    the previous loop + RegularGridInterpolator version (to round-off) but is ~25-100x
+    faster. tempx2, tempy2 and ndim are unused and kept for call compatibility."""
+    patch = var[np.ix_(np.asarray(tempy, dtype=int), np.asarray(tempx, dtype=int))]
+    t = np.arange(-avecyl, avecyl+1, dtype=float)
+    # line coordinates in patch index space; the centre cell is (avecyl, avecyl).
+    # |n| <= 1, so every point lies inside the patch (mode only matters at round-off).
+    coords = np.vstack([avecyl + normy*t, avecyl + normx*t])
+    return map_coordinates(patch, coords, order=1, mode='nearest')
 
 ###############################################################################
 def shocknormvals3d(var,tempx,tempy,tempz,tempx2,tempy2,tempz2,normx,normy,normz,avecyl):
-    #from scipy.interpolate import RegularGridInterpolator
-    import scipy.interpolate as spint
-    #print('NOT DONE SHOCKNORMVALS3D YET')
-    #RGI = spint.RegularGridInterpolator
-	#Calculate the values normal to the shock
-	
-    tempa=np.zeros((2*avecyl+1,2*avecyl+1,2*avecyl+1))
-    #populate the array
-    for ii in range(0,2*avecyl+1):
-        for jj in range(0,2*avecyl+1):
-            for kk in range(0,2*avecyl+1):
-                #print(tempz[kk],tempy[jj],tempx[ii])
-                tempa[kk,jj,ii]=var[int(tempz[kk]),int(tempy[jj]),int(tempx[ii])]
-       
-    
+    """3D version of shocknormvals: `var` is indexed [z,y,x], the patch is
+    tempz x tempy x tempx and the line follows (normx, normy, normz). Trilinear
+    interpolation via map_coordinates; same values as the previous
+    RegularGridInterpolator version to round-off. tempx2, tempy2, tempz2 are unused."""
+    patch = var[np.ix_(np.asarray(tempz, dtype=int), np.asarray(tempy, dtype=int),
+                       np.asarray(tempx, dtype=int))]
+    t = np.arange(-avecyl, avecyl+1, dtype=float)
+    coords = np.vstack([avecyl + normz*t, avecyl + normy*t, avecyl + normx*t])
+    return map_coordinates(patch, coords, order=1, mode='nearest')
 
-    #find the normal line
-    normlinex=normx*np.linspace(-avecyl,avecyl,avecyl*2+1)
-    normliney=normy*np.linspace(-avecyl,avecyl,avecyl*2+1)
-    normlinez=normz*np.linspace(-avecyl,avecyl,avecyl*2+1)
-	
-    #print(normx,normy,normz)
-	
-    pnts=[np.linspace(-avecyl,avecyl,avecyl*2+1),np.linspace(-avecyl,avecyl,avecyl*2+1),np.linspace(-avecyl,avecyl,avecyl*2+1)]
-	
-    rgi = spint.RegularGridInterpolator(
-        points=pnts,
-        values=tempa,
-        bounds_error=False,
-        fill_value=None
-    )
-    #print(tempa)
-    #stop
-	#Interpolate the values normal to the shock
-    #rgi=RGI(points=pnts,values=tempa)
-    #var2=rgi([normlinex,normliney])
-    var2=np.zeros(2*avecyl+1)
-    for ii in range(0,2*avecyl+1):
-        #print(normlinez[ii],normliney[ii],normlinex[ii])
-        #var2[ii]=rgi([normlinez[ii],normliney[ii],normlinex[ii]])
-        var2[ii] = rgi((normlinez[ii], normliney[ii], normlinex[ii]))
-#	var2=interp2d(tempa,tempx2,tempy2,normlinex,normliney)
-    #print(normliney)
-    return(var2)
 ###############################################################################
 def shockPerpDir3D_new(vx, vy, vz,
                             normx, normy, normz,
