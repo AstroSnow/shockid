@@ -9,12 +9,24 @@ import time
 from scipy.ndimage import map_coordinates   # normal-line interpolation
 
 def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,nproc=1,convl=0.0001,avecyl=2,
-            normsmooth=0.0,dbproject=False,periodic=True):
+            normsmooth=0.0,dbproject=False,periodic=True,shocktol=0.05,nonmax='nms',nbrsearch=1):
 	"""
 	normsmooth : Gaussian sigma (cells) applied to density ONLY for computing the shock normal.
 	             The sampled jump values still come from the (smthfac-smoothed) data. 0 = off.
 	dbproject  : refine each normal using div(B)=0: remove its component along
 	             dB = B_post - B_pre and resample. Skipped where |dB| < 5% of |B|.
+	shocktol   : any Mach number within shocktol of 1 makes that side 'marginal' (state 0)
+	             and the candidate is dropped. Lower it to recover borderline 2-4 / 3-4 cases.
+	nonmax     : 'nms'    - Canny-style non-maximum suppression: keep a candidate only if |grad rho|
+	                        there is >= its value one cell either side along the normal
+	                        (interpolated). Gives fronts one cell thick. Default.
+	             'legacy' - old isLocalMax test (argmax of the gradient within +-1 sample of
+	                        the centre of a 5-sample window); passes fronts 2-3 cells thick.
+	nbrsearch  : cells along the normal to try when the gradient maximum itself cannot be
+	             classified (e.g. a Mach number within shocktol of 1). The result is recorded
+	             at the maximum, so nothing is double counted. 0 = off. Default 1.
+	UNITS      : wave speeds assume vA^2 = B^2/rho (Heaviside-Lorentz / mu0=1). For Gaussian
+	             data (Pb = B^2/8pi) pass B/sqrt(4*pi), otherwise vA is ~3.5x too large.
 	periodic   : True  - sampling windows near the boundary wrap around (periodic domains).
 	             False - discard candidates within max(avecyl,2) cells of any boundary,
 	                     so no window ever leaves the domain (non-periodic domains).
@@ -27,7 +39,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 #	convl=0.0001 #Convergence threshold
 #	avecyl=2 #Cylinder to average over
 #	smthfac=0 #smoothing factor (1=no smoothing)
-	shocktol=0.05 #tolerence for the shock transitions
+	#shocktol: tolerance on |M-1| for the state transitions (now a keyword, default 0.05)
 	bulkspeed=0 # Use the bulk sound and alfven speeds or individual
 	#species='plasma' # plasma or neutral
 	species='plasma' # plasma or neutral
@@ -157,12 +169,14 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	#Remove non-local maximun gradient
 	#print('Removing non-local maximum candidates')
 	time1=time.perf_counter()
-	if nproc == 1:
+	if nonmax == 'nms':
+		col,row,zrow=nonMaxSuppress(col,row,zrow,gradrox,gradroy,gradroz,gradmag,ndim,x,y,z,periodic)
+	elif nproc == 1:
 		if ndim ==2:
 			[col,row]=removeNonMax(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2)
 		if ndim ==3:
 			[col,row,zrow]=removeNonMax(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2)
-	if nproc > 1:
+	elif nproc > 1:
 		if ndim ==2:
 			[col,row]=removeNonMaxPar(col,row,zrow,ds['ro'],gradrox,gradroy,gradroz,gradmag,divv,ndim,2,nproc)
 		if ndim ==3:
@@ -184,7 +198,8 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 	if nproc == 1:
 		#Series loop. Can be removed at some point
 		shocks = shockClassLoop(0, np.size(col)-1, col, row, zrow, ds, gradrox, gradroy,
-                          gradroz, gradmag, divv, ndim, avecyl, shocktol, dbproject)
+                          gradroz, gradmag, divv, ndim, avecyl, shocktol, dbproject,
+                          nbrsearch, periodic)
 		
 	if nproc > 1:
 		#Parallel loop
@@ -193,7 +208,7 @@ def shockid(gridx,gridy,gridz,rog,vxg,vyg,vzg,bxg,byg,bzg,prg,ndim=2,smthfac=0,n
 		print('using ',nproc,' cores')
 		pitrange=chunkRanges(np.size(col),nproc)
 		print('Each processor doing ~',int(np.ceil(np.size(col)/nproc)),' elements')
-		sol=pool.starmap(shockClassLoop,[(a,b,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,shocktol,dbproject) for a,b in pitrange])
+		sol=pool.starmap(shockClassLoop,[(a,b,col,row,zrow,ds,gradrox,gradroy,gradroz,gradmag,divv,ndim,avecyl,shocktol,dbproject,nbrsearch,periodic) for a,b in pitrange])
 		pool.close()
 		pool.join()
 		#NEED TO REJOIN EVERYTHING
@@ -237,7 +252,7 @@ def refineNormalDB(normarr, avecyl, ndim, mindb=0.05):
     return nnew/mag
 
 def shockQuality(normarr, avecyl, mpre, mpos):
-    """[mach_margin, bn_jump] for a classified shock.
+    """[mach_margin, bn_jump, bt_rotation_deg] for a classified shock.
     mach_margin : smallest |M-1| over the six finite Mach numbers (how close the
                   classification is to flipping)
     bn_jump     : |Bn_post - Bn_pre| / |B_pre|; should be ~0 (div B = 0), large values
@@ -252,41 +267,101 @@ def shockQuality(normarr, avecyl, mpre, mpos):
     bzpre = float(bz[ipre]) if bz.size > 1 else float(bz)
     Bmag = np.sqrt(normarr['bx'][ipre]**2 + normarr['by'][ipre]**2 + bzpre**2)
     bnj = abs(normarr['bperp'][ipos] - normarr['bperp'][ipre])/Bmag if Bmag > 1e-30 else np.nan
-    return [margin, float(bnj)]
+    #Rotation of the tangential field across the front (deg). Coplanar slow/fast shocks: ~0;
+    #a 2-4 (or 1-3) intermediate shock reverses B_t, so ~180.
+    n = np.array([normarr['normx'], normarr['normy'], normarr.get('normz', 0.0)], dtype=float)
+    def bt(i):
+        bzi = float(bz[i]) if bz.size > 1 else float(bz)
+        B = np.array([normarr['bx'][i], normarr['by'][i], bzi])
+        return B - (B @ n)*n
+    a, b = bt(ipre), bt(ipos)
+    den = np.linalg.norm(a)*np.linalg.norm(b)
+    rot = float(np.degrees(np.arccos(np.clip(a @ b/den, -1, 1)))) if den > 1e-30 else np.nan
+    return [margin, float(bnj), rot]
 
 def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
-                   gradmag, divv, ndim, avecyl, tol=0.05, dbproject=False):
+                   gradmag, divv, ndim, avecyl, tol=0.05, dbproject=False,
+                   nbrsearch=0, periodic=True):
     """Classify candidate cells. Returns, per shock type k:
     k         : locations, [y,x] in 2D or [z,y,x] in 3D
     k+'mach'  : (slow, Alfven, fast) Mach numbers pre then post
-    k+'qual'  : [mach_margin, bn_jump], see shockQuality"""
+    k+'qual'  : [mach_margin, bn_jump, bt_rotation_deg, shift], see shockQuality.
+                shift = signed offset (cells along +n) of the cell whose classification
+                was used; 0 = the candidate cell itself.
+    nbrsearch : if the candidate (a gradient maximum) cannot be classified, try the cells
+                1..nbrsearch steps along its normal, nearest first (ties: larger Mach
+                margin). The hit is still recorded at the candidate, so each front cell
+                is counted at most once and fronts stay one cell thick."""
     hits = {k: [] for k in TRANS.values()}
     mach = {k: [] for k in TRANS.values()}
     qual = {k: [] for k in TRANS.values()}
-    for i in range(int(istart), int(iend)+1):
-        z = zrow if ndim == 2 else zrow[i]
-        normarr = getNormVals(col[i],row[i],z,ds,gradrox,gradroy,gradroz,
+    shape = np.shape(divv)
+    w = max(int(avecyl), 2)
+
+    def classifyCell(c, r, z):
+        normarr = getNormVals(c,r,z,ds,gradrox,gradroy,gradroz,
                               gradmag,divv,ndim,avecyl,gcalc=False)
-        loc = [col[i], row[i]] if ndim == 2 else [zrow[i], col[i], row[i]]
         if dbproject:
             nnew = refineNormalDB(normarr, avecyl, ndim)
             if nnew is not None:
-                normarr = getNormVals(col[i],row[i],z,ds,gradrox,gradroy,gradroz,
+                normarr = getNormVals(c,r,z,ds,gradrox,gradroy,gradroz,
                                       gradmag,divv,ndim,avecyl,gcalc=False,normal=nnew)
         res = classifyShock(normarr, avecyl, tol=tol)
         if res is None:
-            continue
+            return None
         pre, pos, vsa, mpre, mpos = res
         key = TRANS.get((pre, pos))
-        if key is not None:
-            hits[key].append(loc)
-            mach[key].append(list(mpre) + list(mpos))
-            qual[key].append(shockQuality(normarr, avecyl, mpre, mpos))
+        if key is None:
+            return None
+        return key, list(mpre) + list(mpos), shockQuality(normarr, avecyl, mpre, mpos)
+
+    def neighbour(c, r, z, k):
+        """Cell k steps along the gradient normal at (z,c,r), or None if outside the domain."""
+        if ndim == 2:
+            g = gradmag[c, r]
+            if g <= 1e-16: return None
+            idx = [c + k*gradroy[c, r]/g, r + k*gradrox[c, r]/g]
+        else:
+            g = gradmag[z, c, r]
+            if g <= 1e-16: return None
+            idx = [z + k*gradroz[z, c, r]/g, c + k*gradroy[z, c, r]/g, r + k*gradrox[z, c, r]/g]
+        idx = [int(round(v)) for v in idx]
+        dims = shape[-len(idx):]
+        for j, (v, n) in enumerate(zip(idx, dims)):
+            if periodic:
+                idx[j] = v % n
+            elif v < w or v > n-1-w:
+                return None
+        return (idx[0], idx[1], 0) if ndim == 2 else (idx[1], idx[2], idx[0])
+
+    for i in range(int(istart), int(iend)+1):
+        z = zrow if ndim == 2 else zrow[i]
+        loc = [col[i], row[i]] if ndim == 2 else [zrow[i], col[i], row[i]]
+        out = classifyCell(col[i], row[i], z)
+        shift = 0
+        k = 1
+        while out is None and k <= nbrsearch:
+            best = None
+            for kk in (k, -k):
+                nb = neighbour(col[i], row[i], z, kk)
+                if nb is None: continue
+                o = classifyCell(nb[0], nb[1], zrow if ndim == 2 else nb[2])
+                if o is not None and (best is None or o[2][0] > best[0][2][0]):
+                    best = (o, kk)
+            if best is not None:
+                out, shift = best
+            k += 1
+        if out is None:
+            continue
+        key, m, q = out
+        hits[key].append(loc)
+        mach[key].append(m)
+        qual[key].append(q + [shift])
     shocks = {}
     for k in hits:
         shocks[k] = np.array(hits[k], dtype=int).reshape(-1, ndim)
         shocks[k+'mach'] = np.array(mach[k], dtype=float).reshape(-1, 6)
-        shocks[k+'qual'] = np.array(qual[k], dtype=float).reshape(-1, 2)
+        shocks[k+'qual'] = np.array(qual[k], dtype=float).reshape(-1, 4)
     return shocks
 #####################################################################################################
 def classifyShock(normarr, avecyl, off=None, tol=0.05):
@@ -530,6 +605,48 @@ def getNormVals(col,row,zrow,var,gradx,grady,gradz,gradmag,divv,ndim,avecyl,gcal
 			normvals['ang']  = np.arctan2(normvals['bpar'], np.abs(normvals['bperp']))
 			return(normvals)
 	
+################################################################
+def nonMaxSuppress(col,row,zrow,gradx,grady,gradz,gradmag,ndim,x,y,z,periodic=True):
+	"""Non-maximum suppression along the density-gradient normal (as in Canny edge detection).
+	A candidate survives only if gradmag at the cell is >= gradmag one cell further along +n and
+	> gradmag one cell back along -n (values bilinear/trilinear interpolated). The asymmetric
+	tie-break keeps exactly one cell when the peak falls midway between two cells.
+	The step is one cell in index space, so it also works on stretched grids.
+	col,row,zrow are the y,x,z indices; returns the filtered (col,row,zrow)."""
+	from scipy.ndimage import map_coordinates
+	col=np.asarray(col,dtype=int); row=np.asarray(row,dtype=int)
+	if np.size(col) == 0:
+		return col,row,zrow
+	mode='grid-wrap' if periodic else 'nearest'
+	g0=gradmag[(zrow,col,row) if ndim == 3 else (col,row)]
+	ok=g0 > 1.0e-16
+	if ndim == 2:
+		dx=np.gradient(np.asarray(x,dtype=float))[row]
+		dy=np.gradient(np.asarray(y,dtype=float))[col]
+		ox=gradx[col,row]/np.where(ok,g0,1.0)/dx
+		oy=grady[col,row]/np.where(ok,g0,1.0)/dy
+		nrm=np.hypot(ox,oy); nrm[nrm == 0]=1.0
+		ox,oy=ox/nrm,oy/nrm
+		gp=map_coordinates(gradmag,[col+oy,row+ox],order=1,mode=mode)
+		gm=map_coordinates(gradmag,[col-oy,row-ox],order=1,mode=mode)
+		keep=ok & (g0 >= gp) & (g0 > gm)
+		print('Non-max suppression kept',int(keep.sum()),'of',np.size(col),'candidates')
+		return col[keep],row[keep],zrow
+	zrow=np.asarray(zrow,dtype=int)
+	dx=np.gradient(np.asarray(x,dtype=float))[row]
+	dy=np.gradient(np.asarray(y,dtype=float))[col]
+	dz=np.gradient(np.asarray(z,dtype=float))[zrow]
+	safe=np.where(ok,g0,1.0)
+	ox=gradx[zrow,col,row]/safe/dx
+	oy=grady[zrow,col,row]/safe/dy
+	oz=gradz[zrow,col,row]/safe/dz
+	nrm=np.sqrt(ox**2+oy**2+oz**2); nrm[nrm == 0]=1.0
+	ox,oy,oz=ox/nrm,oy/nrm,oz/nrm
+	gp=map_coordinates(gradmag,[zrow+oz,col+oy,row+ox],order=1,mode=mode)
+	gm=map_coordinates(gradmag,[zrow-oz,col-oy,row-ox],order=1,mode=mode)
+	keep=ok & (g0 >= gp) & (g0 > gm)
+	print('Non-max suppression kept',int(keep.sum()),'of',np.size(col),'candidates')
+	return col[keep],row[keep],zrow[keep]
 ################################################################
 def removeNonMax(col,row,zrow,ro,gradx,grady,gradz,gradmag,divv,ndim,avecyl):
 	import numpy as np
