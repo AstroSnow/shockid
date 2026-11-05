@@ -65,6 +65,12 @@ def shockid(gridx, gridy, gridz, rog, vxg, vyg, vzg, bxg, byg, bzg, prg, ndim=2,
       k+'mach' : (N, 6) slow, Alfven, fast Mach numbers, pre-shock then post-shock
       k+'qual' : (N, 4) [mach_margin, bn_jump, bt_rotation_deg, shift], see shockQuality
                  and shockClassLoop.
+      k+'norm' : (N, ndim) unit shock normal used for the classification (after any
+                 dbproject refinement), oriented from the pre- to the post-shock side.
+      k+'perp' : (N, ndim) unit tangent to the front, see shockVectors. In 3D the second
+                 tangent is np.cross(norm, perp).
+                 Vector components are (x, y[, z]), the reverse of the [z,]y,x order of
+                 the locations.
     """
     # Coordinates (not spacings), so derivatives are correct on stretched grids
     x = np.asarray(gridx)
@@ -223,6 +229,8 @@ def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
     k+'qual'  : [mach_margin, bn_jump, bt_rotation_deg, shift], see shockQuality.
                 shift = signed offset (cells along +n) of the cell whose classification
                 was used; 0 = the candidate cell itself.
+    k+'norm', k+'perp' : unit normal and tangent, (x, y[, z]) components, see shockVectors.
+                Like mach and qual, they come from the cell whose classification was used.
     nbrsearch : if the candidate (a gradient maximum) cannot be classified, try the cells
                 1..nbrsearch steps along its normal, nearest first (ties: larger Mach
                 margin). The hit is still recorded at the candidate, so each front cell
@@ -230,6 +238,8 @@ def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
     hits = {k: [] for k in TRANS.values()}
     mach = {k: [] for k in TRANS.values()}
     qual = {k: [] for k in TRANS.values()}
+    norm = {k: [] for k in TRANS.values()}
+    perp = {k: [] for k in TRANS.values()}
     shape = np.shape(divv)
     w = max(int(avecyl), 2)
 
@@ -247,7 +257,8 @@ def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
         key = TRANS.get((pre, pos))
         if key is None:
             return None
-        return key, list(mpre) + list(mpos), shockQuality(normarr, avecyl, mpre, mpos)
+        return (key, list(mpre) + list(mpos), shockQuality(normarr, avecyl, mpre, mpos),
+                shockVectors(normarr, avecyl, ndim))
 
     def neighbour(c, r, z, k):
         """Cell k steps along the gradient normal at (z,c,r), or None if outside the domain."""
@@ -287,15 +298,19 @@ def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
             k += 1
         if out is None:
             continue
-        key, m, q = out
+        key, m, q, (nvec, tvec) = out
         hits[key].append(loc)
         mach[key].append(m)
         qual[key].append(q + [shift])
+        norm[key].append(nvec)
+        perp[key].append(tvec)
     shocks = {}
     for k in hits:
         shocks[k] = np.array(hits[k], dtype=int).reshape(-1, ndim)
         shocks[k+'mach'] = np.array(mach[k], dtype=float).reshape(-1, 6)
         shocks[k+'qual'] = np.array(qual[k], dtype=float).reshape(-1, 4)
+        shocks[k+'norm'] = np.array(norm[k], dtype=float).reshape(-1, ndim)
+        shocks[k+'perp'] = np.array(perp[k], dtype=float).reshape(-1, ndim)
     return shocks
 
 
@@ -481,6 +496,57 @@ def shockQuality(normarr, avecyl, mpre, mpos):
 
 
 ###############################################################################
+def shockVectors(normarr, avecyl, ndim, mindb=1.0e-3, mintan=0.05):
+    """Unit normal and tangent of a classified front, as (x, y[, z]) components.
+
+    norm : the normal used to sample the profile (after any dbproject refinement),
+           flipped if needed so it points from the pre-shock to the post-shock sample.
+    perp : 2D - the in-plane tangent z_hat x norm = (-ny, nx), so (norm, perp) is
+                right-handed. (The internal perpx, perpy used for bpar/vpar flips sign
+                with normx instead.)
+           3D - direction of the jump in tangential field, dB_t = dB - (dB.n)n with
+                dB = B_post - B_pre. By div(B)=0 the jump lies in the front, so this is
+                robust to normal errors, and for a coplanar shock it spans the plane of
+                B and n. Sign: the upstream B_t lies along +perp for fast shocks (B_t
+                grows) and along -perp for slow and intermediate shocks.
+                Only if |dB_t| <= mindb*|B_pre| (no tangential jump: hydro-like or parallel
+                shocks) does it fall back to the upstream B_t (if > mintan*|B_pre|), then
+                the upstream tangential velocity, then any fixed unit vector perpendicular
+                to n; the sign rule above then does not apply.
+                The second tangent is np.cross(norm, perp)."""
+    ipre, ipos = prepostIndex(normarr['ro'], avecyl)
+    comps = ('normx', 'normy', 'normz')[:ndim]
+    n = np.array([normarr[k] for k in comps], dtype=float)
+    mag = np.linalg.norm(n)
+    if mag > 0:
+        n = n/mag
+    if ipos < ipre:                       # make n point from pre- to post-shock side
+        n = -n
+    if ndim == 2:
+        return n.tolist(), [-n[1], n[0]]
+
+    def vec(prefix, i):
+        out = []
+        for c in 'xyz':
+            v = np.asarray(normarr[prefix + c])
+            out.append(float(v[i]) if v.size > 1 else float(v))
+        return np.array(out)
+
+    Bpre, Bpos, vpre = vec('b', ipre), vec('b', ipos), vec('v', ipre)
+    Bref = np.linalg.norm(Bpre)
+    for cand, ref, tol in ((Bpos - Bpre, Bref, mindb), (Bpre, Bref, mintan),
+                           (vpre, np.linalg.norm(vpre), mintan)):
+        tv = cand - (cand @ n)*n
+        tm = np.linalg.norm(tv)
+        if tm > tol*ref and tm > 1.0e-30:
+            return n.tolist(), (tv/tm).tolist()
+    # nothing tangential: any unit vector perpendicular to n
+    axis = np.eye(3)[int(np.argmin(np.abs(n)))]
+    tv = axis - (axis @ n)*n
+    return n.tolist(), (tv/np.linalg.norm(tv)).tolist()
+
+
+###############################################################################
 def prepostIndex(ro, avecyl, off=None):
     """Indices of the pre- and post-shock samples along the normal profile.
 
@@ -554,8 +620,8 @@ def restoreShocks(fname):
 def shockFilter(shocks, maxDis):
     """Remove isolated shock points: a point is dropped if its nearest other point of the
     same type is at least maxDis cells away. Works for 2D [y,x] and 3D [z,y,x] locations.
-    Every shock type is returned (possibly unchanged), with matching '<type>mach' and
-    '<type>qual' rows."""
+    Every shock type is returned (possibly unchanged), with matching '<type>mach',
+    '<type>qual', '<type>norm' and '<type>perp' rows."""
     from scipy.spatial import cKDTree
     shocks2 = {}
     for k in TRANS.values():
@@ -567,7 +633,7 @@ def shockFilter(shocks, maxDis):
             d, _ = cKDTree(pts).query(pts, k=2)    # d[:,1] = distance to nearest other point
             keep = d[:, 1] < maxDis
         shocks2[k] = pts[keep].astype('int')
-        for suffix in ('mach', 'qual'):
+        for suffix in ('mach', 'qual', 'norm', 'perp'):
             if k+suffix in shocks:
                 shocks2[k+suffix] = np.asarray(shocks[k+suffix])[keep]
     return shocks2
