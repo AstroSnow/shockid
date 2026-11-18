@@ -32,7 +32,7 @@ TRANS = {(1,2):'fast', (3,4):'slow', (1,3):'int1',
 ###############################################################################
 def shockid(gridx, gridy, gridz, rog, vxg, vyg, vzg, bxg, byg, bzg, prg, ndim=2, smthfac=0,
             nproc=1, convl=0.0001, avecyl=2, normsmooth=0.0, dbproject=False, periodic=True,
-            shocktol=0.05, nbrsearch=1):
+            shocktol=0.05, nbrsearch=1, plateau=0.05):
     """Find and classify shocks.
 
     gridx, gridy, gridz : 1D coordinate arrays (gridz ignored in 2D). Grids may be
@@ -45,7 +45,13 @@ def shockid(gridx, gridy, gridz, rog, vxg, vyg, vzg, bxg, byg, bzg, prg, ndim=2,
     nproc      : number of processes for the classification loop.
     convl      : candidate cells need div(v) < -convl.
     avecyl     : half-length (cells) of the line sampled along the normal; the pre/post
-                 states are taken at its ends.
+                 states are taken at its ends. Either an int (fixed window), or a pair
+                 (amin, amax) for an adaptive window chosen per cell and per side, see
+                 adaptiveIndex: each side grows from the front until the density
+                 plateaus (never shorter than amin) or reverses (a neighbouring
+                 structure), up to amax. (3, 8) is a good starting point.
+    plateau    : adaptive windows only. A side stops growing once the last one-cell step
+                 changes the density by less than plateau x the change accumulated so far.
     normsmooth : Gaussian sigma (cells) applied to density ONLY for computing the shock normal
                  (and the non-maximum suppression). Jump values still come from the
                  smthfac-smoothed data. 0 = off.
@@ -67,6 +73,8 @@ def shockid(gridx, gridy, gridz, rog, vxg, vyg, vzg, bxg, byg, bzg, prg, ndim=2,
                  and shockClassLoop.
       k+'norm' : (N, ndim) unit shock normal used for the classification (after any
                  dbproject refinement), oriented from the pre- to the post-shock side.
+      k+'win'  : (N, 2) window lengths (cells) actually used on the [pre, post] side;
+                 both equal avecyl for a fixed window.
       k+'perp' : (N, ndim) unit tangent to the front, see shockVectors. In 3D the second
                  tangent is np.cross(norm, perp).
                  Vector components are (x, y[, z]), the reverse of the [z,]y,x order of
@@ -105,7 +113,7 @@ def shockid(gridx, gridy, gridz, rog, vxg, vyg, vzg, bxg, byg, bzg, prg, ndim=2,
 
     if not periodic:
         # Drop candidates whose +-avecyl sampling window would leave the domain
-        w = max(int(avecyl), 2)
+        w = max(windowRange(avecyl)[1], 2)
         ny_, nx_ = np.shape(divv)[-2:]
         keep = (col >= w) & (col <= ny_-1-w) & (row >= w) & (row <= nx_-1-w)
         if ndim == 3:
@@ -123,7 +131,7 @@ def shockid(gridx, gridy, gridz, rog, vxg, vyg, vzg, bxg, byg, bzg, prg, ndim=2,
     print('Begin loop for n=', np.size(col))
     time1 = time.perf_counter()
     args = (col, row, zrow, ds, gradrox, gradroy, gradroz, gradmag, divv, ndim, avecyl,
-            shocktol, dbproject, nbrsearch, periodic)
+            shocktol, dbproject, nbrsearch, periodic, plateau)
     if nproc == 1:
         shocks = shockClassLoop(0, np.size(col)-1, *args)
     else:
@@ -222,13 +230,14 @@ def nonMaxSuppress(col, row, zrow, gradx, grady, gradz, gradmag, ndim, x, y, z, 
 ###############################################################################
 def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
                    gradmag, divv, ndim, avecyl, tol=0.05, dbproject=False,
-                   nbrsearch=0, periodic=True):
+                   nbrsearch=0, periodic=True, plateau=0.05):
     """Classify candidate cells istart..iend (inclusive). Returns, per shock type k:
     k         : locations, [y,x] in 2D or [z,y,x] in 3D
     k+'mach'  : (slow, Alfven, fast) Mach numbers pre then post
     k+'qual'  : [mach_margin, bn_jump, bt_rotation_deg, shift], see shockQuality.
                 shift = signed offset (cells along +n) of the cell whose classification
                 was used; 0 = the candidate cell itself.
+    k+'win'   : [pre, post] window lengths (cells) used; see adaptiveIndex.
     k+'norm', k+'perp' : unit normal and tangent, (x, y[, z]) components, see shockVectors.
                 Like mach and qual, they come from the cell whose classification was used.
     nbrsearch : if the candidate (a gradient maximum) cannot be classified, try the cells
@@ -240,25 +249,36 @@ def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
     qual = {k: [] for k in TRANS.values()}
     norm = {k: [] for k in TRANS.values()}
     perp = {k: [] for k in TRANS.values()}
+    win = {k: [] for k in TRANS.values()}
     shape = np.shape(divv)
-    w = max(int(avecyl), 2)
+    amin, amax = windowRange(avecyl)
+    adaptive = amin != amax
+    w = max(amax, 2)
+
+    def sample(c, r, z, normal=None):
+        # Sample once out to amax; an adaptive window then picks the pre/post samples
+        normarr = getNormVals(c, r, z, ds, gradrox, gradroy, gradroz, gradmag, ndim, amax,
+                              normal=normal)
+        if adaptive:
+            normarr['ipre'], normarr['ipos'] = adaptiveIndex(normarr['ro'], amin, amax, plateau)
+        return normarr
 
     def classifyCell(c, r, z):
-        normarr = getNormVals(c, r, z, ds, gradrox, gradroy, gradroz, gradmag, ndim, avecyl)
+        normarr = sample(c, r, z)
         if dbproject:
-            nnew = refineNormalDB(normarr, avecyl, ndim)
+            nnew = refineNormalDB(normarr, amax, ndim)
             if nnew is not None:
-                normarr = getNormVals(c, r, z, ds, gradrox, gradroy, gradroz, gradmag, ndim,
-                                      avecyl, normal=nnew)
-        res = classifyShock(normarr, avecyl, tol=tol)
+                normarr = sample(c, r, z, normal=nnew)
+        res = classifyShock(normarr, amax, tol=tol)
         if res is None:
             return None
         pre, pos, vsa, mpre, mpos = res
         key = TRANS.get((pre, pos))
         if key is None:
             return None
-        return (key, list(mpre) + list(mpos), shockQuality(normarr, avecyl, mpre, mpos),
-                shockVectors(normarr, avecyl, ndim))
+        ipre, ipos = endIndex(normarr, amax)
+        return (key, list(mpre) + list(mpos), shockQuality(normarr, amax, mpre, mpos),
+                shockVectors(normarr, amax, ndim), [abs(ipre - amax), abs(ipos - amax)])
 
     def neighbour(c, r, z, k):
         """Cell k steps along the gradient normal at (z,c,r), or None if outside the domain."""
@@ -298,12 +318,13 @@ def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
             k += 1
         if out is None:
             continue
-        key, m, q, (nvec, tvec) = out
+        key, m, q, (nvec, tvec), wl = out
         hits[key].append(loc)
         mach[key].append(m)
         qual[key].append(q + [shift])
         norm[key].append(nvec)
         perp[key].append(tvec)
+        win[key].append(wl)
     shocks = {}
     for k in hits:
         shocks[k] = np.array(hits[k], dtype=int).reshape(-1, ndim)
@@ -311,6 +332,7 @@ def shockClassLoop(istart, iend, col, row, zrow, ds, gradrox, gradroy, gradroz,
         shocks[k+'qual'] = np.array(qual[k], dtype=float).reshape(-1, 4)
         shocks[k+'norm'] = np.array(norm[k], dtype=float).reshape(-1, ndim)
         shocks[k+'perp'] = np.array(perp[k], dtype=float).reshape(-1, ndim)
+        shocks[k+'win'] = np.array(win[k], dtype=int).reshape(-1, 2)
     return shocks
 
 
@@ -419,7 +441,7 @@ def refineNormalDB(normarr, avecyl, ndim, mindb=0.05):
     """Normal refined with div(B)=0: B_n is continuous, so the true normal is perpendicular
     to dB = B_post - B_pre. Returns the refined unit normal, or None if |dB| is too small
     (relative to |B| upstream) for the constraint to be meaningful."""
-    ipre, ipos = prepostIndex(normarr['ro'], avecyl)
+    ipre, ipos = endIndex(normarr, avecyl)
     comps = ('bx', 'by', 'bz') if ndim == 3 else ('bx', 'by')
     def val(k, i):
         v = np.asarray(normarr[k]); return float(v[i]) if v.size > 1 else float(v)
@@ -443,7 +465,7 @@ def classifyShock(normarr, avecyl, tol=0.05):
     the slow, Alfven and fast Mach numbers of the normal flow on each side.
     Returns (prestate, posstate, vsa, premach, posmach), or None if rejected (no compression,
     or the flow does not cross from the pre- to the post-shock side)."""
-    ipre, ipos = prepostIndex(normarr['ro'], avecyl)
+    ipre, ipos = endIndex(normarr, avecyl)
     vsa = getShockFrame(normarr['ro'][ipos], normarr['ro'][ipre],
                         normarr['vperp'][ipos], normarr['vperp'][ipre])
     if np.isnan(vsa):
@@ -479,7 +501,7 @@ def shockQuality(normarr, avecyl, mpre, mpos):
     m = np.abs(np.r_[mpre, mpos] - 1.0)
     m = m[np.isfinite(m)]
     margin = float(np.min(m)) if m.size else np.nan
-    ipre, ipos = prepostIndex(normarr['ro'], avecyl)
+    ipre, ipos = endIndex(normarr, avecyl)
     bz = np.asarray(normarr['bz'])
     bzpre = float(bz[ipre]) if bz.size > 1 else float(bz)
     Bmag = np.sqrt(normarr['bx'][ipre]**2 + normarr['by'][ipre]**2 + bzpre**2)
@@ -514,7 +536,7 @@ def shockVectors(normarr, avecyl, ndim, mindb=1.0e-3, mintan=0.05):
                 the upstream tangential velocity, then any fixed unit vector perpendicular
                 to n; the sign rule above then does not apply.
                 The second tangent is np.cross(norm, perp)."""
-    ipre, ipos = prepostIndex(normarr['ro'], avecyl)
+    ipre, ipos = endIndex(normarr, avecyl)
     comps = ('normx', 'normy', 'normz')[:ndim]
     n = np.array([normarr[k] for k in comps], dtype=float)
     mag = np.linalg.norm(n)
@@ -558,6 +580,52 @@ def prepostIndex(ro, avecyl, off=None):
     if ro[lo] < ro[hi]:
         return lo, hi                         # (ipre, ipos): density rises along n
     return hi, lo                             # profile reversed: swap
+
+
+def windowRange(avecyl):
+    """(amin, amax) from avecyl: an int gives a fixed window (amin = amax)."""
+    if np.isscalar(avecyl):
+        return int(avecyl), int(avecyl)
+    amin, amax = (int(a) for a in avecyl)
+    if not 1 <= amin <= amax:
+        raise ValueError('avecyl=(amin, amax) needs 1 <= amin <= amax')
+    return amin, amax
+
+
+def endIndex(normarr, avecyl):
+    """(ipre, ipos) for a sampled profile: the adaptive choice if one was stored by
+    shockClassLoop, otherwise the fixed window ends from prepostIndex."""
+    if 'ipre' in normarr:
+        return normarr['ipre'], normarr['ipos']
+    return prepostIndex(normarr['ro'], avecyl)
+
+
+def adaptiveIndex(ro, amin, amax, plateau=0.05):
+    """Choose the pre- and post-shock samples separately on each side of the front.
+
+    ro      : density along the normal, length 2*amax+1, front at index amax
+    Each side grows outward one cell at a time from the front and stops at the first of:
+      plateau  : |last step| <= plateau*|change since the front|, once at least amin cells
+                 out (the end has reached a settled state)
+      reversal : the density starts to fall on the post-shock side (or rise on the
+                 pre-shock side), i.e. another structure; stop on the cell before it
+      amax     : the sampled line ends
+    The post-shock side is the denser one at amin cells out, as in prepostIndex.
+    Returns (ipre, ipos), indices into ro."""
+    c = amax
+    dpos = 1 if ro[c + amin] >= ro[c - amin] else -1
+    out = {}
+    for d, sgn in ((dpos, 1.0), (-dpos, -1.0)):   # post side: rho rises outward; pre: falls
+        k = 1
+        while k < amax:
+            step = ro[c + d*(k+1)] - ro[c + d*k]
+            if sgn*step < 0:                      # reversal: keep the extremum at k
+                break
+            if k >= amin and abs(step) <= plateau*abs(ro[c + d*k] - ro[c]):
+                break                             # plateau reached at k
+            k += 1
+        out[sgn] = c + d*max(k, 1)
+    return out[-1.0], out[1.0]
 
 
 ###############################################################################
@@ -621,7 +689,7 @@ def shockFilter(shocks, maxDis):
     """Remove isolated shock points: a point is dropped if its nearest other point of the
     same type is at least maxDis cells away. Works for 2D [y,x] and 3D [z,y,x] locations.
     Every shock type is returned (possibly unchanged), with matching '<type>mach',
-    '<type>qual', '<type>norm' and '<type>perp' rows."""
+    '<type>qual', '<type>norm', '<type>perp' and '<type>win' rows."""
     from scipy.spatial import cKDTree
     shocks2 = {}
     for k in TRANS.values():
@@ -633,7 +701,7 @@ def shockFilter(shocks, maxDis):
             d, _ = cKDTree(pts).query(pts, k=2)    # d[:,1] = distance to nearest other point
             keep = d[:, 1] < maxDis
         shocks2[k] = pts[keep].astype('int')
-        for suffix in ('mach', 'qual', 'norm', 'perp'):
+        for suffix in ('mach', 'qual', 'norm', 'perp', 'win'):
             if k+suffix in shocks:
                 shocks2[k+suffix] = np.asarray(shocks[k+suffix])[keep]
     return shocks2
@@ -672,7 +740,7 @@ def shockLine(loc, ds, avecyl=5, ndim=2, rad=False, getPoints=False, getEnergy=F
 
     normarr = getNormVals(col, row, zrow, ds, gradrox, gradroy, gradroz, gradmag, ndim, avecyl,
                           rad=rad)
-    ipre, ipos = prepostIndex(normarr['ro'], avecyl)
+    ipre, ipos = endIndex(normarr, avecyl)
     vsa = getShockFrame(normarr['ro'][ipos], normarr['ro'][ipre],
                         normarr['vperp'][ipos], normarr['vperp'][ipre])
     speeds = getWaveSpeeds(normarr['ro'], normarr['pr'], normarr['bx'], normarr['by'],
