@@ -5,6 +5,9 @@ Created on Tue Jun  6 17:26:37 2023
 
 @author: bs428
 """
+import sys
+sys.path.append("/home/bensnow/pippy/")
+sys.path.append("/home/bensnow/Documents/shockid_dev/shockid_py/")
 from pipreadmods import pipread
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,10 +18,11 @@ import h5py as h5
 #fname='../../Reconnection/Reconnection/mhd_test_5/'
 #fname='../../Reconnection/Reconnection/mhd_test_narrow2/'
 #fname='../../Reconnection/Reconnection/mhd_rad/'
-fname='/media/ben/SnowM2/mhd_rad/'
+#fname='/media/ben/SnowM2/mhd_rad/'
+fname='/home/bensnow/Documents/shockid/shockid_py/testdata/'
 #fname='../../shockstab/Data/'
 
-ds=pipread(fname,40)
+ds=pipread(fname,60)
 #stopplt
 nproc=10
 
@@ -54,7 +58,7 @@ T=ds['pr_p']/ds['ro_p']
 xs=0
 xe=-1#4000
 ys=0
-ye=2000
+ye=-1#2000
 
 
 xg=ds['xgrid'][xs:xe]
@@ -98,5 +102,5 @@ plt.plot(shocks['int3'][:,1],shocks['int3'][:,0],color='c',linestyle='',marker='
 plt.plot(shocks['int4'][:,1],shocks['int4'][:,0],color='g',linestyle='',marker='.',markersize=2.8)
 
 
-#savename='MHD_test_5_10.png'
-#plt.savefig(savename)
+savename='MHD_rectest.png'
+plt.savefig(savename)
